@@ -17,6 +17,8 @@ using ShareIt.Web.Endpoints;
 using ShareIt.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var allowHttp = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing") ||
+    builder.Configuration.GetValue<bool>("ShareIt:AllowHttp");
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(o => o.SingleLine = true);
 var limits = builder.Configuration.GetSection("Limits").Get<ShareItLimits>() ?? new();
@@ -49,8 +51,7 @@ builder.Services.AddAuthentication("ShareIt")
         o.Cookie.Name = "shareit.browser";
         o.Cookie.HttpOnly = true;
         o.Cookie.SameSite = SameSiteMode.Strict;
-        o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing")
-            ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        o.Cookie.SecurePolicy = allowHttp ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         o.ExpireTimeSpan = TimeSpan.FromHours(24);
         o.SlidingExpiration = true;
         o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
@@ -91,7 +92,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
 }
 app.UseForwardedHeaders();
-if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) { app.UseHsts(); app.UseHttpsRedirection(); }
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) app.UseHsts();
+if (!allowHttp) app.UseHttpsRedirection();
 app.Use(async (ctx, next) =>
 {
     ctx.Response.Headers.XContentTypeOptions = "nosniff";

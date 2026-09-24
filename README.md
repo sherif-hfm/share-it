@@ -106,6 +106,8 @@ Follow the **[offline deployment guide](docs/offline-deployment.md)** to transfe
 
 ### On a public HTTPS server
 
+For the existing VM at `172.16.16.106:8083` behind `https://share-it.sherif.online`, follow the [VM and reverse-proxy guide](deploy/http/README.md) to keep LAN access and public HTTPS available together.
+
 1. Point a domain to a Linux server and allow incoming TCP 80/443. UDP 443 is optional.
 2. Copy [`deploy/.env.example`](deploy/.env.example) to `deploy/.env` and set the domain and certificate contact email.
 3. Start the stack from the repository root:

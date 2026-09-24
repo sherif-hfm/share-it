@@ -30,3 +30,6 @@ jobs:
           docker compose --env-file /home/sherif/share-it/deploy/http/.env -f deploy/http/compose.yml up -d --no-build app
       - name: Verify HTTP health
         run: curl --fail --silent --show-error --retry 15 --retry-delay 2 --retry-all-errors http://172.16.16.106:8083/health
+      - name: Verify public hostname
+        run: |
+          curl --fail --silent --show-error --header 'Host: share-it.sherif.online' http://172.16.16.106:8083/health

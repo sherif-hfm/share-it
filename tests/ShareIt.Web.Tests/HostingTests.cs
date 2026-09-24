@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using ShareIt.Core.Contracts;
 using ShareIt.Core.DTOs;
+using ShareIt.Core.Services;
 
 namespace ShareIt.Web.Tests;
 
@@ -78,6 +82,41 @@ public class HostingTests
         var session = (await response.Content.ReadFromJsonAsync<CreatedSession>())!;
         (await client.GetAsync($"/api/v1/sessions/{session.Code}")).EnsureSuccessStatusCode();
         Assert.Equal(secure, response.Headers.Contains("Strict-Transport-Security"));
+    }
+
+    [Fact]
+    public async Task Dav_tagged_conditions_use_the_trusted_proxys_public_https_origin()
+    {
+        await using var factory = new AppFactory();
+        await using var app = Configure(factory, allowHttp: false);
+        using var browser = app.CreateClient(new() { BaseAddress = new Uri($"https://{PublicHost}"), AllowAutoRedirect = false });
+        var session = await factory.CreateSession(browser);
+        var saved = (await app.Services.GetRequiredService<IShareItPersistence>().FindAsync(session.Id))!;
+        await app.Services.GetRequiredService<TextCardService>().SaveAsync(session.Id, new(saved.Grants.First().BrowserId), null, null, "note", "proxy content", "text");
+        var path = $"/dav/{session.Code}/texts/1-note.txt";
+        var authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(session.Code + ":" + session.Pin));
+        using var client = app.CreateClient(new() { BaseAddress = browser.BaseAddress!, AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", authorization);
+        using var initial = await client.GetAsync(path);
+        var etag = initial.Headers.ETag!.ToString();
+        foreach (var method in new[] { "GET", "HEAD", "PROPFIND", "OPTIONS" })
+        {
+            foreach (var current in new[] { true, false })
+            {
+                var context = await app.Server.SendAsync(ctx =>
+                {
+                    ctx.Connection.RemoteIpAddress = IPAddress.Parse(ProxyIp);
+                    ctx.Request.Scheme = "http"; ctx.Request.Host = new HostString(PublicHost);
+                    ctx.Request.Method = method; ctx.Request.Path = path;
+                    ctx.Request.Headers["X-Forwarded-Proto"] = "https";
+                    ctx.Request.Headers.Authorization = authorization;
+                    ctx.Request.Headers["Depth"] = "0";
+                    ctx.Request.Headers["If"] = $"<https://{PublicHost}{path}> ([{(current ? etag : "\"stale\"")}])";
+                });
+                Assert.Equal(current ? (method == "PROPFIND" ? 207 : 200) : 412, context.Response.StatusCode);
+                Assert.Equal("https", context.Request.Scheme);
+            }
+        }
     }
 
     [Fact]

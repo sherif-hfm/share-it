@@ -10,46 +10,23 @@ Share-It provides a **read-only WebDAV drive** at `https://your-server/dav/your-
 
 See [rclone's mounting guide](https://rclone.org/commands/rclone_mount/) for platform requirements. Mounting requires a reachable Share-It server and a trusted HTTPS certificate. For a private certificate authority, follow [offline deployment](offline-deployment.md); do not disable certificate verification. Explicit development/LAN HTTP configurations remain available but transmit Basic credentials without transport encryption.
 
-## Connect a session
+## Connect without configuration
 
-Run `rclone config`, create a new remote, and enter these settings, replacing the example code and host:
+There is **no per-session `rclone config` step**:
 
-| Setting | Value |
-|---|---|
-| Name | `shareit-w3r-yub` |
-| Storage | `webdav` |
-| URL | `https://share.example.com/dav/w3r-yub/` |
-| Vendor | `other` |
-| User | `w3r-yub` |
-| Password | Enter the four-digit session PIN interactively, preserving leading zeroes |
-| Bearer token | Leave empty |
-| Other settings | Keep defaults |
+1. Open the session's **Mount drive** dialog and choose your operating system.
+2. Select **Copy mount command** and paste the entire block into your terminal.
+3. Enter the session's four-digit PIN when prompted, preserving leading zeroes.
 
-The PIN is not recoverable from the Share-It browser interface after its initial display. Rclone stores connection credentials locally; its ordinary password obscuring is not encryption. Protect the configuration file or enable rclone configuration encryption. Never put the PIN in a URL or command argument.
+On Windows, use **PowerShell**. If you are currently in CMD, enter `powershell` first. The command finds rclone on PATH or as `rclone.exe` in the current folder. It mounts to `S:`; choose another unused letter by editing `S:` in the copied command. Linux and macOS mount under `$HOME/ShareIt-<session-code>`; their command runs a child Bash shell, so it also works when pasted into zsh.
 
-## Mount
+The copied command already contains the server URL and session code. It uses rclone's [direct `:webdav:` connection](https://rclone.org/docs/#connection-strings), with `--config NUL` on Windows or `--config /dev/null` on Unix. **No named remote or PIN is saved in rclone's configuration.** View the generated script using **View command** in the dialog.
 
-Windows PowerShell or Command Prompt (choose an unused drive letter):
+The PIN is read using a hidden prompt and passed to `rclone obscure` over standard input. The obscured value is supplied through the process environment, not command arguments. Windows restores the previous password environment variable when the command ends or fails; Unix keeps it in a child process. Rclone's obscuring is reversible and not an encryption boundary. The original PIN is not embedded in copied commands or shell history.
 
-```powershell
-rclone mount shareit-w3r-yub: S: --read-only --dir-cache-time 15s --poll-interval 0 --network-mode
-```
+The PIN is not recoverable from the Share-It browser interface after its initial display. If you use a different WebDAV client, expand **Connection details for other clients** to copy the URL and use the session code/PIN for Basic authentication. Previously saved rclone remotes still work, but are not needed for this flow.
 
-Linux:
-
-```bash
-mkdir -p "$HOME/ShareIt-w3r-yub"
-rclone mount shareit-w3r-yub: "$HOME/ShareIt-w3r-yub" --read-only --dir-cache-time 15s --poll-interval 0
-```
-
-macOS:
-
-```bash
-mkdir -p "$HOME/ShareIt-w3r-yub"
-rclone nfsmount shareit-w3r-yub: "$HOME/ShareIt-w3r-yub" --read-only --dir-cache-time 15s --poll-interval 0
-```
-
-Keep the terminal running. These commands request a read-only mount, and **the server independently rejects writes**, even when the client omits `--read-only`.
+Keep the terminal running. The command uses `--read-only --dir-cache-time 15s --poll-interval 0`; **the server independently rejects writes**, even when the client omits `--read-only`.
 
 The drive contains:
 
@@ -79,7 +56,7 @@ fusermount3 -u "$HOME/ShareIt-w3r-yub"
 umount "$HOME/ShareIt-w3r-yub"
 ```
 
-Use `rclone config` to delete the session remote when finished.
+No saved connection needs to be removed. If you previously configured a named remote manually, you can remove that old entry through `rclone config`.
 
 ## Troubleshooting and server operation
 

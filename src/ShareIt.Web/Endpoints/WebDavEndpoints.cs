@@ -38,6 +38,9 @@ public static class WebDavEndpoints
         var listing = await provider.ResolveAsync(code, path.Segments, path.TrailingSlash, caller, ct);
         var resource = listing.Resource;
         var allow = resource.IsCollection ? WebDavProtocol.CollectionMethods : WebDavProtocol.ReadMethods;
+        if (HttpMethods.IsOptions(method) || method == "PROPFIND" ||
+            (!resource.IsCollection && (HttpMethods.IsGet(method) || HttpMethods.IsHead(method))))
+            WebDavIfHeader.Check(context, listing, path);
 
         if (HttpMethods.IsOptions(method))
         {

@@ -39,6 +39,10 @@ select option, select optgroup {
 .mount-settings dd { margin: 0; min-width: 0; }
 .mount-settings dd .small-button { margin-left: 7px; }
 .mount-command { margin-bottom: 9px; }
+.mount-copy { margin: 12px 0; }
+.mount-command-details { margin-bottom: 12px; }
+.mount-command-details .mount-command { max-height: 260px; overflow: auto; }
+.mount-dialog .field-hint { display: block; }
 .mount-step summary { cursor: pointer; color: var(--text); }
 .mount-step[open] summary { margin-bottom: 10px; }
 .mount-expiry { border-top: 1px solid var(--border-soft); margin-top: 20px; padding-top: 14px; }

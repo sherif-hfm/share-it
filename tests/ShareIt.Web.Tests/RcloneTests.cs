@@ -61,6 +61,11 @@ public sealed class RcloneTests
         Assert.Equal(Encoding.UTF8.GetByteCount(content), stat.RootElement.GetProperty("Size").GetInt64());
         Assert.False(stat.RootElement.GetProperty("IsDir").GetBoolean());
         Assert.Equal(Encoding.UTF8.GetBytes(content), await Read("cat", "smoke:texts/1-note.txt"));
+        var direct = await RunAsync(["cat", ":webdav:texts/1-note.txt", "--webdav-url", configuration["RCLONE_CONFIG_SMOKE_URL"],
+            "--webdav-user", session.Code, "--webdav-vendor", "other"],
+            new Dictionary<string, string> { ["RCLONE_WEBDAV_PASS"] = configuration["RCLONE_CONFIG_SMOKE_PASS"] });
+        Assert.True(direct.ExitCode == 0, direct.Error);
+        Assert.Equal(Encoding.UTF8.GetBytes(content), direct.Output);
         Assert.Equal("percent-path", Encoding.UTF8.GetString(await Read("cat", "smoke:texts/2-" + trickyTitle + ".txt")));
         Assert.Equal(bytes, await Read("cat", "smoke:files/1-data.bin"));
         Assert.Equal(bytes[1048576..1048833], await Read("cat", "smoke:files/1-data.bin", "--offset", "1048576", "--count", "257"));

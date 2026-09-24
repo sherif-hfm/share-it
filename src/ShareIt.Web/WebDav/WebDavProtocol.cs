@@ -49,16 +49,21 @@ public static class WebDavProtocol
         var raw = context.Features.Get<IHttpRequestFeature>()?.RawTarget;
         var hasRawTarget = !string.IsNullOrEmpty(raw);
         var path = hasRawTarget ? raw!.Split('?')[0] : context.Request.PathBase.Add(context.Request.Path).Value!;
+        return ParsePath(path, context.Request.PathBase.Value, hasRawTarget);
+    }
+
+    public static RequestPath ParsePath(string path, string? pathBase, bool encoded = true)
+    {
         var parts = path.Split('/');
-        var prefixCount = context.Request.PathBase.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries).Length ?? 0;
+        var prefixCount = pathBase?.Split('/', StringSplitOptions.RemoveEmptyEntries).Length ?? 0;
         var firstResource = prefixCount + 3; // leading slash, dav, code
         if (!path.StartsWith('/') || parts.Length < firstResource) throw BadPath();
         var trailingSlash = path.EndsWith('/');
         var encodedSegments = parts.Skip(firstResource).ToArray();
         if (trailingSlash && encodedSegments.Length > 0) encodedSegments = encodedSegments[..^1];
-        var decoded = encodedSegments.Select(segment => (hasRawTarget ? Uri.UnescapeDataString(segment) : segment).Normalize(NormalizationForm.FormC)).ToArray();
+        var decoded = encodedSegments.Select(segment => (encoded ? Uri.UnescapeDataString(segment) : segment).Normalize(NormalizationForm.FormC)).ToArray();
         if (decoded.Any(x => x.Length == 0 || x is "." or ".." || x.Contains('/') || x.Contains('\\') || x.Any(char.IsControl))) throw BadPath();
-        return new(string.Join('/', parts.Take(firstResource).Select(x => hasRawTarget ? x : Uri.EscapeDataString(x))) + "/", decoded, trailingSlash);
+        return new(string.Join('/', parts.Take(firstResource).Select(x => encoded ? x : Uri.EscapeDataString(x))) + "/", decoded, trailingSlash);
     }
 
     private static ShareItException BadPath() => new("not_found", "This path is not available.", 404);
@@ -91,13 +96,14 @@ public static class WebDavProtocol
             if (root?.Name != Dav + "propfind") throw new XmlException();
             var children = root.Elements().ToArray();
             var selectors = children.Where(x => x.Name == Dav + "allprop" || x.Name == Dav + "propname" || x.Name == Dav + "prop").ToArray();
-            if (selectors.Length != 1 || children.Any(x => !selectors.Contains(x) && x.Name != Dav + "include") ||
-                children.Count(x => x.Name == Dav + "include") > 1 ||
-                (children.Any(x => x.Name == Dav + "include") && selectors[0].Name != Dav + "allprop")) throw new XmlException();
+            if (selectors.Length != 1) throw new XmlException();
             var selector = selectors[0];
-            if (selector.Name != Dav + "prop" && selector.HasElements) throw new XmlException();
+            var includes = selector.Name == Dav + "allprop" ? children.Where(x => x.Name == Dav + "include").ToArray() : [];
+            if (includes.Length > 1) throw new XmlException();
+            // RFC 4918 section 17: ignore unexpected elements, including their
+            // descendants. Only direct children of prop/include name properties.
             return new(selector.Name == Dav + "propname", selector.Name == Dav + "allprop",
-                (selector.Name == Dav + "prop" ? selector.Elements() : children.Where(x => x.Name == Dav + "include").SelectMany(x => x.Elements()))
+                (selector.Name == Dav + "prop" ? selector.Elements() : includes.SelectMany(x => x.Elements()))
                 .Select(x => x.Name).Distinct().ToArray());
         }
         catch (XmlException) { throw new ShareItException("invalid_xml", "Send a valid WebDAV property request."); }

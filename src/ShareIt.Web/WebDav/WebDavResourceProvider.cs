@@ -17,7 +17,8 @@ public sealed record WebDavResource(Guid SessionId, WebDavResourceKind Kind, int
     public bool IsCollection => Kind is WebDavResourceKind.Session or WebDavResourceKind.Texts or WebDavResourceKind.Files;
 }
 
-public sealed record WebDavListing(WebDavResource Resource, IReadOnlyList<WebDavResource> Children);
+public sealed record WebDavListing(WebDavResource Resource, IReadOnlyList<WebDavResource> Children,
+    IReadOnlyList<WebDavResource> SessionResources);
 
 public sealed class WebDavResourceProvider(SessionService sessions, FileService files)
 {
@@ -28,27 +29,30 @@ public sealed class WebDavResourceProvider(SessionService sessions, FileService 
         var root = new WebDavResource(snapshot.Id, WebDavResourceKind.Session, null, "", snapshot.Code);
         var texts = new WebDavResource(snapshot.Id, WebDavResourceKind.Texts, null, "texts/", "texts");
         var uploads = new WebDavResource(snapshot.Id, WebDavResourceKind.Files, null, "files/", "files");
-        if (segments.Count == 0) return new(root, [texts, uploads]);
-        if (segments.Count > 2 || segments[0] is not ("texts" or "files")) throw Missing();
+        if (segments.Count > 2 || (segments.Count > 0 && segments[0] is not ("texts" or "files"))) throw Missing();
 
-        var children = segments[0] == "texts"
-            ? snapshot.Texts.Select(text =>
+        var textResources = snapshot.Texts.Select(text =>
             {
                 var name = WebDavNames.Text(text);
                 return new WebDavResource(snapshot.Id, WebDavResourceKind.Text, text.Number, "texts/" + name,
                     name, Encoding.UTF8.GetByteCount(text.Content), "text/plain; charset=utf-8",
                     text.UpdatedAtUtc, $"\"text-{text.Version:N}\"", text.Content);
-            }).ToArray()
-            : snapshot.Files.Select(file =>
+            }).ToArray();
+        var fileResources = snapshot.Files.Select(file =>
             {
                 var name = WebDavNames.File(file);
                 return new WebDavResource(snapshot.Id, WebDavResourceKind.File, file.Number, "files/" + name,
                     name, file.Size, "application/octet-stream", file.CreatedAtUtc, $"\"sha256-{file.Sha256}\"");
             }).ToArray();
-        if (segments.Count == 1) return new(segments[0] == "texts" ? texts : uploads, children);
+        // Tagged If conditions must see the same snapshot as the requested body,
+        // including when they refer to another item in this authorized session.
+        WebDavResource[] resources = [root, texts, uploads, .. textResources, .. fileResources];
+        if (segments.Count == 0) return new(root, [texts, uploads], resources);
+        var children = segments[0] == "texts" ? textResources : fileResources;
+        if (segments.Count == 1) return new(segments[0] == "texts" ? texts : uploads, children, resources);
         var resource = children.SingleOrDefault(x => x.Name == segments[1]);
         if (resource == null || trailingSlash) throw Missing();
-        return new(resource, []);
+        return new(resource, [], resources);
     }
 
     public async Task<Stream> OpenReadAsync(WebDavResource resource, Caller caller, CancellationToken ct)

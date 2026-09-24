@@ -1,10 +1,12 @@
 # Verification
 
-Verified on 24 September 2026.
+Updated on 25 September 2026.
 
 ## WebDAV verification
 
 The read-only drive adds 20 HTTP integration cases covering Basic-only authentication, generic challenges, session isolation and expiry, portable/Unicode/percent-escaped names, directory properties, unknown properties, XML/DTD and request-size rejection, exact bytes, HEAD, conditional/ranged reads, hidden pending/deleted files, and denied mutation methods. A full 150-item metadata burst fits the default DAV request budget; the browser/API budget and PIN lockout remain separate protections.
+
+Protocol review fixes add nine regression cases for XML extension handling and WebDAV `If` conditions: GET/HEAD/PROPFIND/OPTIONS, strong ETags, negation, AND/OR lists, tagged same-session URLs, unknown lock tokens, escaped names, edits, malformed/oversized headers, and authentication/read-only precedence. A hosting regression also checks tagged public HTTPS URLs after trusted proxy forwarding.
 
 The optional real-client integration passed using the official, SHA-256-verified **rclone v1.75.1 Windows amd64** executable against an isolated Kestrel HTTP test server. It exercised recursive listing, stat, Unicode/percent-containing paths, exact text and 2 MiB binary downloads, an offset read, an empty file, rejected upload without a client read-only flag, a browser-service text update, and denied access after closure. Synthetic credentials were supplied through standard input and a child-process-only environment; personal rclone configuration was not used.
 
@@ -19,13 +21,17 @@ Without that variable, the test is explicitly skipped. The executable is a test 
 
 The new Chromium browser test passed for platform selection, session-specific URL and command copying, read-only flags, credential handling, Escape/focus recovery, and mobile overflow. Desktop/mobile screenshots were visually inspected at `.artifacts/screenshots/mount-drive-desktop.png` and `mount-drive-mobile.png`.
 
+The mounting dialog now generates direct `:webdav:` commands without a saved remote. The real-rclone check additionally reads exact text using only an ephemeral password environment variable and explicit URL/user arguments, with an empty configuration. Windows PowerShell 5.1 script tests replace the interactive prompt/native executable to verify hidden PIN input, stdin-only password obscuring, literal URL quoting, and environment restoration after success, obscuring failure, and mount failure. These script tests do not represent a native WinFsp mount.
+
 | Native mount check | Status |
 |---|---|
 | Windows Explorer drive through WinFsp | Not run: WinFsp is not installed on this host |
-| Linux FUSE mount | Not run: no Linux mount environment provisioned |
+| Linux FUSE mount | Passed: rclone v1.75.1 and FUSE 3 in an isolated Ubuntu container through Caddy HTTPS |
 | macOS NFS mount | Not run: no macOS host available |
 
-Protocol/client checks passed; native OS mounting is not recorded as verified. No production deployment was performed for this change. Existing HTTPS/reverse-proxy hosting tests remain part of the regression suite; the new real-rclone check uses loopback HTTP in Testing mode.
+The Linux mount check used the fixed Release build in Production mode and the checked-in `deploy/offline/Caddyfile`, with an isolated private CA. The HTTP probe verified the certificate chain and hostname against that CA, and rclone used `--ca-cert` without bypassing TLS verification. Real browser actions created content, edited it without changing byte length, edited it to a different length, renamed it, deleted it, and closed the session. One continuously running FUSE mount with the generated command's 15-second directory cache detected each content/path change after refreshing the directory. Exact text and 2 MiB binary reads, seeked bytes, rejected writes, closed-session HTTP 401 responses, and clean native unmount all passed. Extended PROPFIND, false If conditions, Basic authentication, and ranged downloads also passed through HTTPS/Caddy. The browser context accepted the isolated certificate for UI automation; the separate HTTP and rclone checks verified trust.
+
+The temporary containers, anonymous test volumes, and network were removed; the existing preview and its data were unchanged. This validates native Linux FUSE behavior inside Docker, not desktop file-manager integration. Windows Explorer and macOS Finder mounting remain unverified because this host has no WinFsp installation or macOS environment. No production deployment was performed. The ordinary real-rclone regression continues to use isolated loopback HTTP in Testing mode.
 
 ## Existing verification history
 

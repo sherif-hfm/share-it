@@ -37,6 +37,7 @@ public class HostingTests
 
     [Theory]
     [InlineData(ProxyIp, "https://share-it.sherif.online", 200, "https")]
+    [InlineData("::ffff:192.0.2.10", "https://share-it.sherif.online", 200, "https")]
     [InlineData("192.0.2.11", "https://share-it.sherif.online", 403, "http")]
     [InlineData(ProxyIp, "https://unrecognized.example", 403, "https")]
     public async Task Blazor_accepts_public_https_only_from_the_trusted_proxy_and_same_origin(
@@ -58,7 +59,7 @@ public class HostingTests
         });
         Assert.Equal(status, context.Response.StatusCode);
         Assert.Equal(scheme, context.Request.Scheme);
-        Assert.Equal(remoteIp == ProxyIp ? "198.51.100.20" : remoteIp, context.Connection.RemoteIpAddress?.ToString());
+        Assert.Equal(scheme == "https" ? "198.51.100.20" : remoteIp, context.Connection.RemoteIpAddress?.ToString());
     }
 
     [Theory]

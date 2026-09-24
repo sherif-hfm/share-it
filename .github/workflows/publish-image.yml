@@ -35,11 +35,6 @@ jobs:
           curl --fail --silent --show-error --header 'Host: share-it.sherif.online' http://172.16.16.106:8083/health
       - name: Verify public HTTPS connection
         run: |
-          if ! curl --fail --silent --show-error --output /dev/null --max-time 20 \
+          curl --fail --silent --show-error --output /dev/null --max-time 20 \
             --request POST --header 'Origin: https://share-it.sherif.online' \
-            'https://share-it.sherif.online/_blazor/negotiate?negotiateVersion=1'; then
-            echo 'Public HTTPS negotiation failed. Checking proxy configuration and backend connections.'
-            docker exec shareit-http printenv ShareIt__TrustedProxy AllowedHosts
-            docker exec shareit-http cat /proc/net/tcp /proc/net/tcp6
-            exit 1
-          fi
+            'https://share-it.sherif.online/_blazor/negotiate?negotiateVersion=1'

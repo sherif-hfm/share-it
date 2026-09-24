@@ -15,10 +15,10 @@ SHAREIT_HOST=172.16.16.106
 SHAREIT_PUBLIC_HOST=share-it.sherif.online
 SHAREIT_BIND_IP=172.16.16.106
 SHAREIT_HTTP_PORT=8083
-SHAREIT_TRUSTED_PROXY=172.16.16.110
+SHAREIT_TRUSTED_PROXY=192.168.65.1
 ```
 
-Nginx at `172.16.16.110` terminates public HTTPS and connects to the app over HTTP at `172.16.16.106:8083`. Compose defaults to trusting `172.16.16.110`, including when the VM's existing environment file omits `SHAREIT_TRUSTED_PROXY`. Override that setting if the proxy's source IP changes. The app only accepts forwarded HTTPS/client-IP headers from that address or loopback. This lets the Blazor origin check and secure cookies work through the proxy while the backend connection remains HTTP. Do not enable unrestricted forwarded-header trust. See Microsoft's [proxy configuration guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0).
+Nginx at `172.16.16.110` terminates public HTTPS and connects to the app over HTTP at `172.16.16.106:8083`. This VM's Docker networking translates the source address to `192.168.65.1` (observed as `::ffff:192.168.65.1` inside the container). Compose therefore defaults to trusting that single gateway address, including when the VM's existing environment file omits `SHAREIT_TRUSTED_PROXY`. Override that setting if the source address seen by the app changes; with source-preserving Docker networking it would be `172.16.16.110`. The app only accepts forwarded HTTPS/client-IP headers from the configured address or loopback. This lets the Blazor origin check and secure cookies work through the proxy while the backend connection remains HTTP. Keep direct backend access limited to trusted LAN clients because Docker translates those connections through the same gateway. See Microsoft's [proxy configuration guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0).
 
 For Nginx Proxy Manager, configure the proxy host with domain `share-it.sherif.online`, forwarding scheme `http`, host `172.16.16.106`, port `8083`, and **Websockets Support** enabled. Assign the domain's TLS certificate and enable **Force SSL**. The proxy must preserve the original `Host` and send `X-Forwarded-Proto: https` and `X-Forwarded-For`.
 

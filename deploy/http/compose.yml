@@ -12,7 +12,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       # Keep direct LAN HTTP access alongside HTTPS terminated by the public proxy.
       ShareIt__AllowHttp: "true"
-      ShareIt__TrustedProxy: ${SHAREIT_TRUSTED_PROXY:-172.16.16.110}
+      # Nginx is 172.16.16.110; Docker forwards its connections from this gateway.
+      ShareIt__TrustedProxy: ${SHAREIT_TRUSTED_PROXY:-192.168.65.1}
       AllowedHosts: "${SHAREIT_HOST:?Set SHAREIT_HOST in deploy/http/.env};${SHAREIT_PUBLIC_HOST:-share-it.sherif.online}"
     ports:
       - "${SHAREIT_BIND_IP:-0.0.0.0}:${SHAREIT_HTTP_PORT:-8083}:8080"

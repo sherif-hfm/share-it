@@ -62,6 +62,8 @@ Distribute that certificate through your normal IT trust process to each client.
 
 Open `https://shareit.home.arpa` (or your configured IP/name). Trusted HTTPS keeps browser uploads, clipboard access, and secure cookies working on remote machines. A plain HTTP private IP is not equivalent to `localhost`: browsers restrict secure-context features there.
 
+Copy buttons try a browser compatibility method when the modern Clipboard API is unavailable or denied. If both methods fail, a selected text box appears for manual Ctrl+C/Cmd+C copying; press Escape to dismiss it. Use trusted HTTPS for reliable access to the modern Clipboard API.
+
 curl can use the exported root directly without changing its machine-wide trust store. The PIN is entered at its password prompt:
 
 ```bash

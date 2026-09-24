@@ -65,10 +65,10 @@ public sealed class BrowserFixture : IAsyncLifetime
 [Collection("browser")]
 public class BrowserTests(BrowserFixture fixture)
 {
-    private async Task<IPage> Page(IBrowserContext context)
+    private async Task<IPage> Page(IBrowserContext context, string? origin = null)
     {
         var page = await context.NewPageAsync();
-        await page.GotoAsync(fixture.Url);
+        await page.GotoAsync(origin ?? fixture.Url);
         await page.Locator(".home").WaitForAsync();
         return page;
     }
@@ -164,17 +164,25 @@ public class BrowserTests(BrowserFixture fixture)
         // Windows normalizes native clipboard line endings to CRLF.
         Assert.Equal(latestDraft, (await page.EvaluateAsync<string>("navigator.clipboard.readText()")).Replace("\r\n", "\n"));
         await page.EvaluateAsync("() => { navigator.clipboard.writeText = () => Promise.reject(new Error('Permission denied for test')); }");
+        const string fallbackDraft = latestDraft + "\nCopied through compatibility fallback";
+        await page.Locator("#text-content").FillAsync(fallbackDraft);
         await page.GetByRole(AriaRole.Button, new() { Name = "Copy my draft", Exact = true }).ClickAsync();
-        await Assertions.Expect(page.Locator(".clipboard-fallback")).ToHaveValueAsync(latestDraft);
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog).GetByRole(AriaRole.Status)).ToHaveTextAsync("Copied to clipboard.");
+        Assert.Equal(fallbackDraft, (await page.EvaluateAsync<string>("navigator.clipboard.readText()")).Replace("\r\n", "\n"));
+        await Assertions.Expect(page.Locator(".clipboard-fallback")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("#text-content")).ToBeFocusedAsync();
+        await page.EvaluateAsync("() => { document.execCommand = () => false; }");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Copy my draft", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.Locator(".clipboard-fallback")).ToHaveValueAsync(fallbackDraft);
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(page.Locator(".clipboard-fallback")).ToHaveCountAsync(0);
         await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
         await Assertions.Expect(page.Locator("#text-content")).ToBeFocusedAsync();
-        await Assertions.Expect(page.Locator("#text-content")).ToHaveValueAsync(latestDraft);
+        await Assertions.Expect(page.Locator("#text-content")).ToHaveValueAsync(fallbackDraft);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save as a new card" }).ClickAsync();
         await Assertions.Expect(page.Locator(".text-card")).ToHaveCountAsync(2);
         var raw = await context.APIRequest.GetAsync(fixture.Url + $"/api/v1/sessions/{session.Code}/texts/2/raw");
-        Assert.Equal(latestDraft, await raw.TextAsync());
+        Assert.Equal(fallbackDraft, await raw.TextAsync());
     }
 
     [Fact]
@@ -237,33 +245,102 @@ public class BrowserTests(BrowserFixture fixture)
     [InlineData("chromium")]
     [InlineData("firefox")]
     [InlineData("webkit")]
-    public async Task Browser_engines_preserve_maximum_text_and_escape_html(string engine)
+    public async Task Browser_engines_copy_preserve_maximum_text_and_escape_html(string engine)
     {
         var type = engine switch { "firefox" => fixture.Playwright.Firefox, "webkit" => fixture.Playwright.Webkit, _ => fixture.Playwright.Chromium };
-        await using var browser = await type.LaunchAsync(new() { Headless = true, Timeout = 30000 });
+        var serverUri = new Uri(fixture.Url);
+        var insecureOrigin = engine == "chromium" && serverUri.Scheme == "http" && serverUri.IsLoopback;
+        var origin = insecureOrigin ? new UriBuilder(serverUri) { Host = "shareit.test" }.Uri.GetLeftPart(UriPartial.Authority) : fixture.Url.TrimEnd('/');
+        await using var browser = await type.LaunchAsync(new()
+        {
+            Headless = true, Timeout = 30000,
+            Args = insecureOrigin ? ["--host-resolver-rules=MAP shareit.test 127.0.0.1"] : []
+        });
         await using var context = await browser.NewContextAsync();
-        var page = await Page(context);
-        var session = await Create(page);
+        // Chromium exercises real insecure HTTP; the other engines simulate the missing API.
+        if (!insecureOrigin)
+            await context.AddInitScriptAsync("Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });");
+        var page = await Page(context, origin);
+        if (insecureOrigin) Assert.False(await page.EvaluateAsync<bool>("window.isSecureContext"));
+        Assert.True(await page.EvaluateAsync<bool>("navigator.clipboard === undefined"));
+        await page.GetByRole(AriaRole.Button, new() { Name = "Create session", Exact = true }).ClickAsync();
+        var dialog = page.GetByRole(AriaRole.Dialog);
+        await dialog.WaitForAsync();
+        var code = (await dialog.Locator(".credentials strong").First.TextContentAsync())!;
+        await AssertCopiedByPasting(page, dialog.Locator(".credentials button").First, code);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Open workspace" }).ClickAsync();
+        await page.Locator(".workspace").WaitForAsync();
+        await AssertCopiedByPasting(page, page.Locator(".session-code"), code);
+        await AssertCopiedByPasting(page, page.GetByRole(AriaRole.Button, new() { Name = "Copy link", Exact = true }), origin + "/?join=" + code);
+
         await page.GetByRole(AriaRole.Button, new() { Name = "Add your first text" }).ClickAsync();
-        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
-        await page.Keyboard.PressAsync("Escape");
-        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Add your first text" })).ToBeFocusedAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Add your first text" }).ClickAsync();
-        await page.GetByLabel("TITLE", new() { Exact = true }).FillAsync("Maximum text");
-        const string prefix = "<img src=x onerror=alert('unsafe')>\n";
-        var content = prefix + new string('"', 65536 - Encoding.UTF8.GetByteCount(prefix));
+        await page.GetByLabel("TITLE", new() { Exact = true }).FillAsync("Clipboard compatibility");
+        const string content = "  مرحبًا 🌍 <tag> & café\n\tline two\n";
         await page.Locator("#text-content").FillAsync(content);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save text", Exact = true }).ClickAsync();
-        await Assertions.Expect(page.Locator(".text-card")).ToHaveCountAsync(1);
+        var copyText = page.GetByRole(AriaRole.Button, new() { Name = "Copy text", Exact = true });
+        await AssertCopiedByPasting(page, copyText, content);
+
+        // Secure origins can still reject clipboard writes, for example when access is denied.
+        await page.EvaluateAsync("Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('Permission denied for test')) } });");
+        await AssertCopiedByPasting(page, page.Locator(".session-code"), code);
+        await AssertCopiedByPasting(page, copyText, content);
+        await page.Locator(".text-card").GetByRole(AriaRole.Button, new() { Name = "curl", Exact = true }).ClickAsync();
+        var command = (await dialog.Locator(".curl-command").TextContentAsync())!;
+        await AssertCopiedByPasting(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Copy command", Exact = true }), command);
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(dialog).ToHaveCountAsync(0);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add text", Exact = true }).ClickAsync();
+        await Assertions.Expect(dialog).ToBeVisibleAsync();
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(dialog).ToHaveCountAsync(0);
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Add text", Exact = true })).ToBeFocusedAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add text", Exact = true }).ClickAsync();
+        await page.GetByLabel("TITLE", new() { Exact = true }).FillAsync("Maximum text");
+        const string prefix = "<img src=x onerror=alert('unsafe')>\n";
+        var maximumContent = prefix + new string('"', 65536 - Encoding.UTF8.GetByteCount(prefix));
+        await page.Locator("#text-content").FillAsync(maximumContent);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save text", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.Locator(".text-card")).ToHaveCountAsync(2);
         Assert.Empty(await page.Locator(".text-card img").AllAsync());
-        var raw = await context.APIRequest.GetAsync(fixture.Url + $"/api/v1/sessions/{session.Code}/texts/1/raw");
-        Assert.True(raw.Ok);
-        Assert.Equal(content, await raw.TextAsync());
+        var raw = await page.EvaluateAsync<string>("""
+            async url => {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Raw text request failed: ${response.status}`);
+                return response.text();
+            }
+            """, $"/api/v1/sessions/{code}/texts/2/raw");
+        Assert.Equal(maximumContent, raw);
         Assert.True(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth"));
         await page.GetByRole(AriaRole.Button, new() { Name = "End session", Exact = true }).ClickAsync();
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Keep working", Exact = true })).ToBeFocusedAsync();
-        await page.GetByRole(AriaRole.Dialog).GetByRole(AriaRole.Button, new() { Name = "End session", Exact = true }).ClickAsync();
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "End session", Exact = true }).ClickAsync();
         await Assertions.Expect(page.Locator(".closed-state")).ToBeVisibleAsync();
+    }
+
+    private static async Task AssertCopiedByPasting(IPage page, ILocator button, string expected)
+    {
+        await button.ClickAsync();
+        await Assertions.Expect(page.Locator("dialog[open] .dialog-toast, body:not(:has(dialog[open])) #global-toast")).ToHaveTextAsync("Copied to clipboard.");
+        await Assertions.Expect(page.Locator(".clipboard-fallback")).ToHaveCountAsync(0);
+        await Assertions.Expect(button).ToBeFocusedAsync();
+        await page.EvaluateAsync("""
+            () => {
+                const input = document.createElement('textarea');
+                input.id = 'clipboard-paste-check';
+                (document.querySelector('dialog[open]') || document.body).appendChild(input);
+                input.focus({ preventScroll: true });
+            }
+            """);
+        try
+        {
+            await page.Keyboard.PressAsync("ControlOrMeta+V");
+            await Assertions.Expect(page.Locator("#clipboard-paste-check")).ToHaveValueAsync(expected);
+        }
+        finally
+        {
+            await page.EvaluateAsync("document.getElementById('clipboard-paste-check')?.remove()");
+        }
     }
 }

@@ -28,25 +28,41 @@
   }
   async function copy(value, trigger) {
     const previous = trigger?.dataset.copyInput ? document.getElementById(trigger.dataset.copyInput) : trigger || document.activeElement;
-    try { await navigator.clipboard.writeText(value); toast("Copied to clipboard."); }
-    catch {
-      const selection = document.createElement("textarea");
-      selection.value = value; selection.setAttribute("readonly", ""); selection.className = "clipboard-fallback";
-      selection.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:4000;width:calc(100% - 24px);height:100px";
-      (document.querySelector("dialog[open]") || document.body).appendChild(selection); selection.focus(); selection.select();
-      toast("Press Ctrl+C or Cmd+C to copy the selected text, then Escape.");
-      const onBlur = () => selection.remove();
-      selection.addEventListener("keydown", e => {
-        if (e.key === "Escape") {
-          e.preventDefault(); e.stopPropagation();
-          selection.removeEventListener("blur", onBlur);
-          const target = trigger?.dataset.copyInput ? document.getElementById(trigger.dataset.copyInput) : previous;
-          if (target?.isConnected) target.focus();
-          selection.remove();
-        }
-      });
-      selection.addEventListener("blur", onBlur, { once: true });
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        toast("Copied to clipboard."); return;
+      }
+    } catch { /* Try the compatibility path if clipboard access is denied. */ }
+    const selection = document.createElement("textarea");
+    selection.value = value; selection.setAttribute("readonly", "");
+    selection.setAttribute("aria-label", "Text to copy");
+    selection.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+    // Keep the temporary input inside the active dialog, where it can receive focus.
+    (document.querySelector("dialog[open]") || document.body).appendChild(selection);
+    selection.focus({ preventScroll: true }); selection.select();
+    const restoreFocus = () => {
+      const target = trigger?.dataset.copyInput ? document.getElementById(trigger.dataset.copyInput) : previous;
+      if (target?.isConnected) target.focus({ preventScroll: true });
+    };
+    let copied = false;
+    // Older browsers and HTTP LAN pages may lack the modern Clipboard API.
+    try { copied = document.execCommand("copy"); } catch { /* Offer manual copying below. */ }
+    if (copied) {
+      selection.remove(); restoreFocus(); toast("Copied to clipboard."); return;
     }
+    selection.className = "clipboard-fallback";
+    selection.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:4000;width:calc(100% - 24px);height:100px";
+    toast("Automatic copying is unavailable. Press Ctrl+C or Cmd+C to copy the selected text, then Escape.");
+    const onBlur = () => selection.remove();
+    selection.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        e.preventDefault(); e.stopPropagation();
+        selection.removeEventListener("blur", onBlur);
+        restoreFocus(); selection.remove();
+      }
+    });
+    selection.addEventListener("blur", onBlur, { once: true });
   }
   document.addEventListener("click", e => {
     lastTrigger = e.target.closest("button,a,input,textarea,select");

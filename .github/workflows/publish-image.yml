@@ -1,0 +1,31 @@
+name: Deploy Share-It to VM
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shareit-vm-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, shareit-vm]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and deploy
+        run: |
+          docker compose --env-file /home/sherif/share-it/deploy/http/.env -f deploy/http/compose.yml build app
+          if [ "$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' shareit-http 2>/dev/null)" != "shareit-http" ]; then
+            docker rm -f shareit-http 2>/dev/null || true
+          fi
+          docker compose --env-file /home/sherif/share-it/deploy/http/.env -f deploy/http/compose.yml up -d --no-build app
+      - name: Verify HTTP health
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 2 http://172.16.16.106:8083/health

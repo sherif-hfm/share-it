@@ -1,0 +1,32 @@
+name: shareit-http
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: shareit:vm
+    container_name: shareit-http
+    restart: unless-stopped
+    environment:
+      # The current app only permits HTTP session cookies in this environment.
+      ASPNETCORE_ENVIRONMENT: Testing
+      AllowedHosts: ${SHAREIT_HOST:?Set SHAREIT_HOST in deploy/http/.env}
+    ports:
+      - "${SHAREIT_BIND_IP:-0.0.0.0}:${SHAREIT_HTTP_PORT:-8083}:8080"
+    volumes:
+      - app_data:/data
+      - app_secrets:/keys
+    mem_limit: 1g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  # Reuse the volumes created by the initial VM deployment.
+  app_data:
+    external: true
+    name: shareit-offline_app_data
+  app_secrets:
+    external: true
+    name: shareit-offline_app_secrets

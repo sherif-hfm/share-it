@@ -21,3 +21,21 @@ Basic credentials are the session code and four-digit PIN. Codes ignore hyphens 
 The curl dialog provides separate Bash/macOS, PowerShell, and Windows CMD commands. CMD commands use double quotes around URLs; single quotes are literal characters in Command Prompt and can cause curl's port-number parsing error. A CMD file command uses a safe `download-<number>` name when the original name contains Windows-invalid characters or shell variable expansions.
 
 Errors include a machine-readable `code` and human-readable `detail`. Statuses: 400 invalid input/antiforgery, 401 missing or invalid credentials, 403 wrong session/read-only access, 404 unavailable item, 409 edit conflict, 410 ended session for an existing grant, 413 quota exceeded, 429 throttled, 503 capacity exhausted. A closed/expired session presented with Basic returns the same generic 401 as invalid credentials.
+
+## Read-only WebDAV
+
+`/dav/{code}/` exposes one session through Basic authentication (code/PIN); browser cookies alone do not authorize it. Use [the mounting guide](mounting.md) to configure rclone with vendor `other`. There is no session directory at `/dav/`.
+
+| Resource | Methods | Result |
+|---|---|---|
+| Session root, `texts/`, `files/` | OPTIONS, PROPFIND | Read capabilities and virtual collections |
+| `texts/{number}-{title}.{format}` | OPTIONS, PROPFIND, GET, HEAD | Exact UTF-8 text, without BOM or newline conversion |
+| `files/{number}-{name}` | OPTIONS, PROPFIND, GET, HEAD | Streamed uploaded file |
+
+PROPFIND returns `207 application/xml`, supports Depth 0 and 1, and supports empty-body/allprop, propname, requested properties, and allprop/include. Missing Depth means infinity; infinite collection requests return 403 with `DAV:propfind-finite-depth`. Requests are limited to 64 KiB, with DTDs and external entities prohibited. Unknown properties have a separate 404 propstat. Available item properties are `displayname`, `resourcetype`, `getcontentlength`, `getcontenttype`, `getlastmodified`, and `getetag`; collections expose displayname/resourcetype. Collection hrefs end with `/`; URL segments and XML values are escaped separately.
+
+GET/HEAD provide strong ETags, last-modified dates, conditional reads, and single byte ranges (206 or 416). Text validators use the saved version; file validators use SHA-256. Private responses retain `Cache-Control: no-store`, though mounting clients/applications may cache data locally.
+
+Authenticated PUT, DELETE, MKCOL, COPY, MOVE, PROPPATCH, POST, and PATCH return 403 without consuming mutation bodies. Unsupported methods, including LOCK/UNLOCK, return 405 with Allow on existing resources. DAV class 1 is advertised; class 2/locking is not. This endpoint does not offer dead-property storage, mutable collections, or a write-capable identity.
+
+Errors use XML under `DAV:error`, with application codes in `urn:share-it`; finite-depth errors use the DAV namespace. Missing/invalid credentials and ended sessions return generic 401 with a Basic challenge, cross-session access returns 403, unavailable items return 404, and throttling returns 429 with Retry-After. DAV has a separate configurable per-IP limit (`Limits:WebDavRequestsPerMinute`, default 600/minute); PIN throttling is shared with existing authentication. Reads revalidate server access on each request; an already-open read may complete after closure.

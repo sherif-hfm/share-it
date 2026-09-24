@@ -16,7 +16,7 @@
 else
 {
     <section class="workspace">
-        <SessionHeader Code="@snapshot.Code" ExpiresAtUtc="snapshot.ExpiresAtUtc" OnEnd="() => showEnd = true" OnExtend="() => showExpiry = true" />
+        <SessionHeader Code="@snapshot.Code" ExpiresAtUtc="snapshot.ExpiresAtUtc" OnEnd="() => showEnd = true" OnExtend="() => showExpiry = true" OnMount="() => showMount = true" />
         @if (snapshot.ExpiresAtUtc - DateTime.UtcNow < TimeSpan.FromMinutes(5)) { <div class="expiry-warning" role="status">This session ends soon. Copy what you need or <button class="text-link" @onclick="() => showExpiry = true">extend its lifetime</button>.</div> }
         @if (pageError != null) { <p class="inline-error" role="alert">@pageError</p> }
         <div class="workspace-tabs" role="tablist" aria-label="Workspace content"><button role="tab" aria-selected="@(!filesTab)" class="@(!filesTab ? "active" : "")" @onclick="() => filesTab = false">Text <span>@snapshot.Texts.Count</span></button><button role="tab" aria-selected="@filesTab" class="@(filesTab ? "active" : "")" @onclick="() => filesTab = true">Files <span>@snapshot.Files.Count</span></button></div>
@@ -34,6 +34,7 @@ else
     </section>
 }
 
+@if (showMount && snapshot != null) { <MountDriveDialog Code="@snapshot.Code" OnCancel="() => showMount = false" /> }
 @if (showEditor && snapshot != null)
 {
     <Modal Title="@(editingNumber.HasValue ? "Edit your text." : "Something worth sharing.")" Eyebrow="TEXT & SNIPPETS" OnCancel="CloseEditor" Class="editor-modal">
@@ -76,7 +77,7 @@ else
     [Parameter] public string Code { get; set; } = "";
     private SessionSnapshot? snapshot;
     private Caller caller = new(null);
-    private bool loading = true, ended, busy, filesTab, showEditor, showEnd, showExpiry, conflict, disposed;
+    private bool loading = true, ended, busy, filesTab, showEditor, showEnd, showExpiry, showMount, conflict, disposed;
     private TerminalShell terminalShell = TerminalShell.Bash;
     private string? closedMessage, pageError, editorError, endError;
     private string draftTitle = "", draftContent = "", draftLanguage = "text";

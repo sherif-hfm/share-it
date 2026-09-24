@@ -15,6 +15,7 @@ using ShareIt.Web.Authentication;
 using ShareIt.Web.Components;
 using ShareIt.Web.Endpoints;
 using ShareIt.Web.Services;
+using ShareIt.Web.WebDav;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowHttp = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing") ||
@@ -30,6 +31,7 @@ builder.Services.AddSingleton<SessionChangeNotifier>();
 builder.Services.AddSingleton<ISessionChangePublisher>(sp => sp.GetRequiredService<SessionChangeNotifier>());
 builder.Services.AddShareItInfrastructure(dataPath, builder.Configuration["ShareIt:PinPepperFile"]);
 builder.Services.AddSingleton<CredentialGuard>();
+builder.Services.AddScoped<WebDavResourceProvider>();
 builder.Services.AddSingleton<CircuitRegistry>();
 builder.Services.AddScoped<CircuitHandler, CircuitBudget>();
 builder.Services.AddLocalization(o => o.ResourcesPath = "Resources");
@@ -44,7 +46,7 @@ builder.Services.AddDataProtection().SetApplicationName("ShareIt").PersistKeysTo
 builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddAuthentication("ShareIt")
     .AddPolicyScheme("ShareIt", null, o => o.ForwardDefaultSelector = ctx =>
-        ctx.Request.Path.StartsWithSegments("/api/v1") && ctx.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase)
+        WebDavProtocol.IsWebDav(ctx) || (ctx.Request.Path.StartsWithSegments("/api/v1") && ctx.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
             ? BrowserIdentity.BasicScheme : BrowserIdentity.CookieScheme)
     .AddCookie(BrowserIdentity.CookieScheme, o =>
     {
@@ -69,15 +71,17 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new()
-        { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        RateLimitPartition.GetFixedWindowLimiter($"{(WebDavProtocol.IsWebDav(ctx) ? "dav" : "http")}:{ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown"}", _ => new()
+        { PermitLimit = WebDavProtocol.IsWebDav(ctx) ? Math.Max(1, limits.WebDavRequestsPerMinute) : 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     o.AddPolicy("create", ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new()
         { PermitLimit = 10, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
     o.OnRejected = async (ctx, ct) =>
     {
         if (ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
             ctx.HttpContext.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        await ctx.HttpContext.Response.WriteAsJsonAsync(new { detail = "Too many requests. Please try again later.", code = "try_later" }, ct);
+        if (WebDavProtocol.IsWebDav(ctx.HttpContext))
+            await WebDavProtocol.ErrorAsync(ctx.HttpContext, 429, "try_later", "Too many requests. Please try again later.");
+        else await ctx.HttpContext.Response.WriteAsJsonAsync(new { detail = "Too many requests. Please try again later.", code = "try_later" }, ct);
     };
 });
 
@@ -112,7 +116,8 @@ app.Use(async (ctx, next) =>
         ctx.Response.StatusCode = ex.Status;
         if (ex.Status == 429 && ex.RetryAfterSeconds is { } retryAfter)
             ctx.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        await ctx.Response.WriteAsJsonAsync(new { title = "Request could not be completed", detail = ex.Message, code = ex.Code });
+        if (WebDavProtocol.IsWebDav(ctx)) await WebDavProtocol.ErrorAsync(ctx, ex.Status, ex.Code, ex.Message);
+        else await ctx.Response.WriteAsJsonAsync(new { title = "Request could not be completed", detail = ex.Message, code = ex.Code });
     }
     catch (AntiforgeryValidationException) when (!ctx.Response.HasStarted)
     { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { detail = "Refresh this page and try again.", code = "csrf" }); }
@@ -129,6 +134,7 @@ app.UseAntiforgery();
 app.MapSessionEndpoints();
 app.MapTextEndpoints();
 app.MapFileEndpoints();
+app.MapWebDavEndpoints();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

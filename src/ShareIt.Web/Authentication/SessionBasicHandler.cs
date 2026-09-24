@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
+using ShareIt.Web.WebDav;
 
 namespace ShareIt.Web.Authentication;
 
@@ -12,7 +13,8 @@ public sealed class SessionBasicHandler(IOptionsMonitor<AuthenticationSchemeOpti
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Path.StartsWithSegments("/api/v1") || !HttpMethods.IsGet(Request.Method)) return AuthenticateResult.NoResult();
+        if (!WebDavProtocol.IsWebDav(Context) &&
+            (!Request.Path.StartsWithSegments("/api/v1") || !HttpMethods.IsGet(Request.Method))) return AuthenticateResult.NoResult();
         var header = Request.Headers.Authorization.ToString();
         if (!header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase)) return AuthenticateResult.NoResult();
         string credentials;

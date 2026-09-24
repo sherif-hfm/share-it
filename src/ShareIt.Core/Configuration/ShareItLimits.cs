@@ -11,6 +11,7 @@ public sealed class ShareItLimits
     public int MaxSessionTextBytes { get; set; } = 2 * 1024 * 1024;
     public int MaxActiveSessions { get; set; } = 1000;
     public int MaxCircuits { get; set; } = 200;
+    public int WebDavRequestsPerMinute { get; set; } = 600;
     public int CleanupIntervalSeconds { get; set; } = 60;
     public int CleanupConcurrency { get; set; } = 4;
     public int CleanupOperationTimeoutSeconds { get; set; } = 30;

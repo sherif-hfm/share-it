@@ -36,6 +36,7 @@ Built for developers, administrators, and anyone whose work spans more than one 
 | **Keep the little things together** | Save text, commands, and configurations alongside small files. Copy exact saved content or download what you need. |
 | **Pick up the latest saved version** | Saved changes appear in connected browsers. Conflict handling preserves your draft when someone else saves first. |
 | **Bring your terminal** | Read snippets and download files with `curl`, with commands for Bash/macOS, PowerShell, and Windows CMD. |
+| **Mount your session** | Open texts and files as a read-only drive with rclone on Windows, Linux, or macOS. The session's **Mount drive** dialog walks through setup. |
 | **Make room for temporary work** | Choose a session lifetime of 1, 4, 8, or 24 hours. Access ends at expiry, and automatic cleanup takes care of the contents. |
 | **Keep it on your infrastructure** | Host on your own server or private LAN. Browser assets, fonts, storage, and cleanup are local. |
 
@@ -48,6 +49,8 @@ A calm charcoal-and-teal interface keeps the workspace focused, with Dark, Light
 3. **Open it on another machine.** Join in a browser with the code and PIN, or use the workspace's generated `curl` commands to read and download.
 
 All joined browser participants can manage content, change expiry, or end the session. Terminal access is read-only.
+
+Drive access is also read-only. See the [mounting guide](docs/mounting.md) for WebDAV/rclone setup, client prerequisites, and how caching and session expiry affect a mounted drive.
 
 ## Get started
 

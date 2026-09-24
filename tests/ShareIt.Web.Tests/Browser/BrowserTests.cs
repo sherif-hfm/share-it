@@ -84,6 +84,50 @@ public class BrowserTests(BrowserFixture fixture)
     }
 
     [Fact]
+    public async Task Mount_drive_guide_has_platform_commands_copy_feedback_and_keyboard_access()
+    {
+        await using var context = await fixture.Browser.NewContextAsync(new() { Permissions = ["clipboard-read", "clipboard-write"] });
+        var page = await Page(context); var session = await Create(page);
+        var mount = page.GetByRole(AriaRole.Button, new() { Name = "Mount drive", Exact = true });
+        await mount.ClickAsync(); var dialog = page.GetByRole(AriaRole.Dialog);
+        await Assertions.Expect(dialog).ToBeVisibleAsync();
+        var expectedUrl = fixture.Url + "/dav/" + session.Code + "/";
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Copy WebDAV URL", Exact = true }).ClickAsync();
+        Assert.Equal(expectedUrl, await page.EvaluateAsync<string>("navigator.clipboard.readText()"));
+        await Assertions.Expect(dialog.GetByRole(AriaRole.Status)).ToHaveTextAsync("Copied to clipboard.");
+        foreach (var platform in new[] { "Windows", "Linux", "macOS" })
+        {
+            var platformButton = dialog.GetByRole(AriaRole.Button, new() { Name = platform, Exact = true });
+            await platformButton.ClickAsync();
+            await Assertions.Expect(platformButton).ToHaveAttributeAsync("aria-pressed", "true");
+            var command = await dialog.Locator(".mount-command").InnerTextAsync();
+            Assert.Contains("shareit-" + session.Code + ":", command); Assert.Contains("--read-only", command);
+            Assert.Contains("--dir-cache-time 15s", command); Assert.Contains("--poll-interval 0", command);
+            Assert.DoesNotContain(session.Code + ":" + session.Pin, command);
+            Assert.DoesNotContain("--webdav-pass", command);
+            Assert.Contains(platform == "macOS" ? "rclone nfsmount" : "rclone mount", command);
+            if (platform == "Windows") Assert.Contains(" S: ", command);
+            else Assert.Contains("mkdir -p", command);
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Copy mount command", Exact = true }).ClickAsync();
+            Assert.Equal(command.Replace("\r\n", "\n"), (await page.EvaluateAsync<string>("navigator.clipboard.readText()")).Replace("\r\n", "\n"));
+        }
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Windows", Exact = true }).ClickAsync();
+        await Assertions.Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Windows", Exact = true })).ToHaveAttributeAsync("aria-pressed", "true");
+        await dialog.EvaluateAsync("element => element.scrollTop = 0");
+        await page.ScreenshotAsync(new() { Path = Path.Combine(fixture.Artifacts, "mount-drive-desktop.png"), FullPage = true });
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(dialog).ToHaveCountAsync(0); await Assertions.Expect(mount).ToBeFocusedAsync();
+        await page.SetViewportSizeAsync(390, 844);
+        Assert.True(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth"));
+        await mount.ClickAsync();
+        Assert.True(await dialog.EvaluateAsync<bool>("element => element.scrollWidth <= element.clientWidth"));
+        await page.ScreenshotAsync(new() { Path = Path.Combine(fixture.Artifacts, "mount-drive-mobile.png"), FullPage = true });
+        await page.Keyboard.PressAsync("Tab");
+        Assert.True(await dialog.EvaluateAsync<bool>("element => element.contains(document.activeElement)"));
+        await page.Keyboard.PressAsync("Escape"); await Assertions.Expect(mount).ToBeFocusedAsync();
+    }
+
+    [Fact]
     public async Task Created_session_cancellation_failure_keeps_credentials_and_allows_retry()
     {
         await using var context = await fixture.Browser.NewContextAsync();

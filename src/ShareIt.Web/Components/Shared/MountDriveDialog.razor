@@ -1,0 +1,59 @@
+@inject NavigationManager Navigation
+<Modal Title="Open this session as a drive." Eyebrow="READ-ONLY ACCESS" OnCancel="OnCancel" Class="mount-dialog">
+    <p class="modal-description">Browse your texts and files in Explorer, Finder, or your Linux file manager. Changes are saved through Share-It’s browser interface.</p>
+    <div class="curl-tabs" role="group" aria-label="Operating system">
+        @foreach (var option in Enum.GetValues<MountPlatform>())
+        {
+            <button class="small-button @(platform == option ? "selected" : "")" aria-pressed="@(platform == option ? "true" : "false")" @onclick="() => platform = option">@Label(option)</button>
+        }
+    </div>
+    <section class="mount-step" aria-labelledby="mount-install">
+        <h3 id="mount-install">1. Install the mounting tools</h3>
+        @if (platform == MountPlatform.Windows)
+        {
+            <p>Install <a href="https://rclone.org/downloads/" target="_blank" rel="noopener noreferrer">rclone</a> and <a href="https://winfsp.dev/rel/" target="_blank" rel="noopener noreferrer">WinFsp</a>. Open a regular PowerShell terminal, without “Run as administrator”.</p>
+        }
+        else if (platform == MountPlatform.Linux)
+        {
+            <p>Install <a href="https://rclone.org/downloads/" target="_blank" rel="noopener noreferrer">rclone</a> and your distribution’s FUSE 3 package, including <code>fusermount3</code>.</p>
+        }
+        else
+        {
+            <p>Install the latest <a href="https://rclone.org/downloads/" target="_blank" rel="noopener noreferrer">rclone</a>. These commands use <code>rclone nfsmount</code> with macOS’s built-in NFS client. No macFUSE installation is needed.</p>
+        }
+    </section>
+    <section class="mount-step" aria-labelledby="mount-configure">
+        <h3 id="mount-configure">2. Connect this session</h3>
+        <p>Run <code>rclone config</code> and create a new remote with these values. Choose <strong>WebDAV</strong> for storage and <strong>Other</strong> for the vendor.</p>
+        <dl class="mount-settings">
+            <dt>Name</dt><dd><code>@MountCommands.RemoteName(Code)</code></dd>
+            <dt>URL</dt><dd><code>@DavUrl</code><button class="small-button" data-copy-value="@DavUrl" aria-label="Copy WebDAV URL"><Icon Name="copy" Size="14" /> Copy</button></dd>
+            <dt>Username</dt><dd><code>@Code</code></dd>
+            <dt>Password</dt><dd>Enter this session’s four-digit PIN at the prompt. Leave bearer token empty; keep other settings at their defaults.</dd>
+        </dl>
+        <p class="field-hint">Use HTTPS with a trusted certificate. Keep the PIN out of URLs and command arguments.</p>
+    </section>
+    <section class="mount-step" aria-labelledby="mount-command">
+        <h3 id="mount-command">3. Mount the drive</h3>
+        @if (platform == MountPlatform.Windows) { <p>Use an available drive letter; change <code>S:</code> if it is already in use.</p> }
+        <pre class="curl-command mount-command">@Command</pre>
+        <button class="small-button" data-copy-value="@Command"><Icon Name="copy" Size="14" /> Copy mount command</button>
+        <p class="field-hint">Keep this terminal running. Browse the <code>texts</code> and <code>files</code> folders. Browser changes appear after the 15-second directory cache expires and you refresh or reopen the item.</p>
+    </section>
+    <details class="mount-step">
+        <summary>Disconnect and remove saved access</summary>
+        <p>Press <kbd>Ctrl</kbd> + <kbd>C</kbd> in the terminal running rclone.</p>
+        @if (platform != MountPlatform.Windows) { <p>If the mount remains, close open files and run:</p><pre class="curl-command">@MountCommands.Unmount(Code, platform)</pre> }
+        <p>Use <code>rclone config</code> to delete <code>@MountCommands.RemoteName(Code)</code> when finished. Rclone saves the connection credentials on this computer.</p>
+    </details>
+    <p class="field-hint mount-expiry">When the session ends, new server requests stop working. Files already downloaded or cached remain on your computer.</p>
+</Modal>
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    [Parameter] public EventCallback OnCancel { get; set; }
+    private MountPlatform platform = MountPlatform.Windows;
+    private string DavUrl => MountCommands.Url(Navigation.BaseUri, Code);
+    private string Command => MountCommands.Mount(Code, platform);
+    private static string Label(MountPlatform value) => value == MountPlatform.MacOS ? "macOS" : value.ToString();
+}

@@ -1,10 +1,11 @@
 @inject NavigationManager Navigation
 <div class="workspace-heading"><div><div class="eyebrow"><span class="status-dot"></span> YOUR SHARED SPACE</div><h1>A little space. A lot less friction.</h1><p>Everything you need, between the machines you work on.</p></div><button class="button quiet end-button" @onclick="OnEnd"><Icon Name="close" Size="16" /> End session</button></div>
-<div class="session-bar"><div class="session-code-group"><span class="bar-label">SESSION</span><button class="session-code" data-copy-value="@Code" title="Copy session code">@Code <Icon Name="copy" Size="16" /></button><button class="small-button invite-button" data-copy-value="@(Navigation.BaseUri + "?join=" + Code)"><Icon Name="link" Size="14" /> Copy link</button></div><div class="session-status"><StatusBadge /><span class="divider"></span><button class="expiry-button" @onclick="OnExtend" title="Change session expiry"><Icon Name="clock" Size="16" /><span data-countdown="@ExpiresAtUtc.ToString("O")">@Countdown</span><Icon Name="chevron" Size="14" /></button></div></div>
+<div class="session-bar"><div class="session-code-group"><span class="bar-label">SESSION</span><button class="session-code" data-copy-value="@Code" title="Copy session code">@Code <Icon Name="copy" Size="16" /></button><button class="small-button invite-button" data-copy-value="@(Navigation.BaseUri + "?join=" + Code)"><Icon Name="link" Size="14" /> Copy link</button><button class="small-button mount-button" @onclick="OnMount"><Icon Name="folder" Size="14" /> Mount drive</button></div><div class="session-status"><StatusBadge /><span class="divider"></span><button class="expiry-button" @onclick="OnExtend" title="Change session expiry"><Icon Name="clock" Size="16" /><span data-countdown="@ExpiresAtUtc.ToString("O")">@Countdown</span><Icon Name="chevron" Size="14" /></button></div></div>
 @code {
     [Parameter] public string Code { get; set; } = "";
     [Parameter] public DateTime ExpiresAtUtc { get; set; }
     [Parameter] public EventCallback OnEnd { get; set; }
     [Parameter] public EventCallback OnExtend { get; set; }
+    [Parameter] public EventCallback OnMount { get; set; }
     private string Countdown => $"{Math.Max(0, (int)(ExpiresAtUtc - DateTime.UtcNow).TotalMinutes)}m left";
 }

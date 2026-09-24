@@ -2,6 +2,33 @@
 
 Verified on 24 September 2026.
 
+## WebDAV verification
+
+The read-only drive adds 20 HTTP integration cases covering Basic-only authentication, generic challenges, session isolation and expiry, portable/Unicode/percent-escaped names, directory properties, unknown properties, XML/DTD and request-size rejection, exact bytes, HEAD, conditional/ranged reads, hidden pending/deleted files, and denied mutation methods. A full 150-item metadata burst fits the default DAV request budget; the browser/API budget and PIN lockout remain separate protections.
+
+The optional real-client integration passed using the official, SHA-256-verified **rclone v1.75.1 Windows amd64** executable against an isolated Kestrel HTTP test server. It exercised recursive listing, stat, Unicode/percent-containing paths, exact text and 2 MiB binary downloads, an offset read, an empty file, rejected upload without a client read-only flag, a browser-service text update, and denied access after closure. Synthetic credentials were supplied through standard input and a child-process-only environment; personal rclone configuration was not used.
+
+To run this client check, set `SHAREIT_RCLONE_PATH` to an installed rclone executable:
+
+```powershell
+$env:SHAREIT_RCLONE_PATH = 'C:\tools\rclone\rclone.exe'
+dotnet test tests/ShareIt.Web.Tests --filter FullyQualifiedName~RcloneTests
+```
+
+Without that variable, the test is explicitly skipped. The executable is a test prerequisite, not an application dependency.
+
+The new Chromium browser test passed for platform selection, session-specific URL and command copying, read-only flags, credential handling, Escape/focus recovery, and mobile overflow. Desktop/mobile screenshots were visually inspected at `.artifacts/screenshots/mount-drive-desktop.png` and `mount-drive-mobile.png`.
+
+| Native mount check | Status |
+|---|---|
+| Windows Explorer drive through WinFsp | Not run: WinFsp is not installed on this host |
+| Linux FUSE mount | Not run: no Linux mount environment provisioned |
+| macOS NFS mount | Not run: no macOS host available |
+
+Protocol/client checks passed; native OS mounting is not recorded as verified. No production deployment was performed for this change. Existing HTTPS/reverse-proxy hosting tests remain part of the regression suite; the new real-rclone check uses loopback HTTP in Testing mode.
+
+## Existing verification history
+
 | Check | Result |
 |---|---|
 | Core rules | 12 tests passed |

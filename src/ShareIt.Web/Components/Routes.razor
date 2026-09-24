@@ -1,0 +1,11 @@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(MainLayout)">
+            <div class="closed-state"><Icon Name="link" Size="32" /><h1>Nothing here, yet.</h1><p>This link is unavailable. Start a session to share something new.</p><a class="button primary" href="/">Back to Share-It</a></div>
+        </LayoutView>
+    </NotFound>
+</Router>

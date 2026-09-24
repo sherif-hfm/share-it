@@ -1,0 +1,184 @@
+@page "/s/{Code}"
+@implements IAsyncDisposable
+@inject SessionService Sessions
+@inject TextCardService Texts
+@inject FileService Files
+@inject AuthenticationStateProvider Authentication
+@inject SessionChangeNotifier Changes
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+<PageTitle>Workspace — Share-It</PageTitle>
+
+@if (snapshot == null)
+{
+    <section class="closed-state"><div class="closed-symbol"><Icon Name="@(ended ? "check" : "link")" Size="30" /></div><span class="eyebrow">@(loading ? "MAKING THE CONNECTION" : "UNTIL NEXT TIME")</span><h1>@(loading ? "Opening your workspace…" : ended ? "All wrapped up." : "This space is closed.")</h1><p>@(loading ? "Getting your session ready." : closedMessage ?? "This session has ended or expired. Your next connection is one click away.")</p>@if (!loading) { <a class="button primary" href="/">Start a new session <Icon Name="arrow" /></a> }</section>
+}
+else
+{
+    <section class="workspace">
+        <SessionHeader Code="@snapshot.Code" ExpiresAtUtc="snapshot.ExpiresAtUtc" OnEnd="() => showEnd = true" OnExtend="() => showExpiry = true" />
+        @if (snapshot.ExpiresAtUtc - DateTime.UtcNow < TimeSpan.FromMinutes(5)) { <div class="expiry-warning" role="status">This session ends soon. Copy what you need or <button class="text-link" @onclick="() => showExpiry = true">extend its lifetime</button>.</div> }
+        @if (pageError != null) { <p class="inline-error" role="alert">@pageError</p> }
+        <div class="workspace-tabs" role="tablist" aria-label="Workspace content"><button role="tab" aria-selected="@(!filesTab)" class="@(!filesTab ? "active" : "")" @onclick="() => filesTab = false">Text <span>@snapshot.Texts.Count</span></button><button role="tab" aria-selected="@filesTab" class="@(filesTab ? "active" : "")" @onclick="() => filesTab = true">Files <span>@snapshot.Files.Count</span></button></div>
+        <div class="workspace-grid @(filesTab ? "show-files" : "show-text")">
+            <section class="texts-panel" aria-labelledby="texts-heading"><div class="section-heading"><h2 id="texts-heading">Text &amp; snippets <span class="count-badge">@snapshot.Texts.Count</span></h2><AppButton Kind="secondary" Class="small-button-add" Icon="plus" OnClick="() => Edit(null)">Add text</AppButton></div>
+                @if (snapshot.Texts.Count == 0)
+                {
+                    <div class="text-empty"><div class="empty-art"><div class="empty-sheet back"></div><div class="empty-sheet front"><Icon Name="terminal" Size="24" /><span></span><span></span><span></span></div><span class="empty-spark">+</span></div><h2>Make the next copy count.</h2><p>A command, a note, a configuration.<br />Add it here. Pick it up on your other machine.</p><AppButton Icon="plus" OnClick="() => Edit(null)">Add your first text</AppButton><span class="empty-caption">Small things. Seamless handoffs.</span></div>
+                }
+                else { <div class="text-cards">@foreach (var card in snapshot.Texts) { <TextCard @key="card.Number" Card="card" OnEdit="Edit" OnDelete="ConfirmDeleteText" OnCurl="ShowTextCurl" /> }</div> }
+                <div class="workspace-footnote"><Icon Name="shield" Size="14" /><span>Only people with your session code and PIN can join.</span></div>
+            </section>
+            <FileList Code="@snapshot.Code" Files="snapshot.Files" TotalBytes="snapshot.FileBytes" OnChanged="Reload" OnDelete="ConfirmDeleteFile" OnCurl="ShowFileCurl" />
+        </div>
+    </section>
+}
+
+@if (showEditor && snapshot != null)
+{
+    <Modal Title="@(editingNumber.HasValue ? "Edit your text." : "Something worth sharing.")" Eyebrow="TEXT & SNIPPETS" OnCancel="CloseEditor" Class="editor-modal">
+        <div class="editor-meta"><div><label class="field-label" for="text-title">TITLE</label><input id="text-title" maxlength="120" placeholder="e.g. Deployment commands" @bind="draftTitle" /></div><div><label class="field-label" for="text-language">FORMAT</label><select id="text-language" @bind="draftLanguage"><option value="text">Plain text</option><option value="bash">Bash</option><option value="powershell">PowerShell</option><option value="json">JSON</option><option value="yaml">YAML</option></select></div></div>
+        <label class="field-label" for="text-content">CONTENT <span>64 KiB maximum</span></label><textarea id="text-content" class="code-editor" placeholder="Paste a command, configuration, or a little context…" spellcheck="false" @bind="draftContent" data-save-shortcut="save-text"></textarea>
+        @if (editorError != null) { <p class="inline-error" role="alert">@editorError</p> }
+        @if (conflict)
+        {
+            @if (latest != null) { <details class="conflict-preview"><summary>View the latest saved version</summary><pre>@latest.Content</pre></details> }
+            <div class="conflict-actions"><button class="small-button" data-copy-input="text-content">Copy my draft</button><button class="small-button" @onclick="SaveAsNew">Save as a new card</button>@if (latest != null) { <button class="small-button" @onclick="ReplaceLatest">Replace saved text with my draft</button> }</div>
+        }
+        <div class="modal-actions editor-actions"><span class="keyboard-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to save</span><AppButton Kind="secondary" OnClick="CloseEditor" Disabled="busy">Cancel</AppButton><AppButton Icon="check" OnClick="SaveText" Busy="busy" Disabled="conflict" id="save-text">Save text</AppButton></div>
+    </Modal>
+}
+@if (showEnd && snapshot != null) { <EndSessionDialog ExpiresAtUtc="snapshot.ExpiresAtUtc" Busy="busy" Error="endError" OnCancel="() => showEnd = false" OnEnd="End" /> }
+@if (showExpiry && snapshot != null)
+{
+    <Modal Title="A little more time?" Eyebrow="SESSION LIFETIME" OnCancel="() => showExpiry = false" Class="compact-modal"><p class="modal-description">Choose how much longer this session stays open. Sessions can last up to 24 hours from creation.</p><label class="field-label" for="extend-hours">TIME FROM NOW</label><select id="extend-hours" @bind="extendHours"><option value="1">1 more hour</option><option value="4">4 more hours</option><option value="8">8 more hours</option><option value="24">Up to the 24-hour limit</option></select><div class="modal-actions"><AppButton Kind="secondary" OnClick="() => showExpiry = false">Cancel</AppButton><AppButton OnClick="Extend" Busy="busy">Update expiry</AppButton></div></Modal>
+}
+@if (deleteText != null || deleteFile != null)
+{
+    <Modal Title="Remove this item?" Eyebrow="SHARED WITH EVERYONE" OnCancel="CancelDelete" Class="compact-modal"><p class="modal-description">“@(deleteText?.Title ?? deleteFile?.Name)” will be removed for everyone in this session.</p><div class="modal-actions"><AppButton Kind="secondary" OnClick="CancelDelete" data-autofocus="true">Keep it</AppButton><AppButton Kind="danger" OnClick="Delete" Busy="busy">Delete item</AppButton></div></Modal>
+}
+@if (curlNumber.HasValue && snapshot != null)
+{
+    <Modal Title="Pick it up in your terminal." Eyebrow="ONE COMMAND AWAY" OnCancel="() => curlNumber = null">
+        <p class="modal-description">Choose your terminal, run the command, then enter your four-digit PIN at the password prompt.</p>
+        <div class="curl-tabs" role="group" aria-label="Terminal shell">
+            <button class="small-button @(terminalShell == TerminalShell.Bash ? "selected" : "")" aria-pressed="@(terminalShell == TerminalShell.Bash ? "true" : "false")" @onclick="() => terminalShell = TerminalShell.Bash">Bash / macOS</button>
+            <button class="small-button @(terminalShell == TerminalShell.PowerShell ? "selected" : "")" aria-pressed="@(terminalShell == TerminalShell.PowerShell ? "true" : "false")" @onclick="() => terminalShell = TerminalShell.PowerShell">PowerShell</button>
+            <button class="small-button @(terminalShell == TerminalShell.Cmd ? "selected" : "")" aria-pressed="@(terminalShell == TerminalShell.Cmd ? "true" : "false")" @onclick="() => terminalShell = TerminalShell.Cmd">Windows CMD</button>
+        </div>
+        <pre class="curl-command">@CurlCommand</pre>
+        @if (terminalShell == TerminalShell.Cmd) { <p class="field-hint">For Command Prompt (cmd.exe). Uses double quotes around the URL.</p> }
+        <div class="modal-actions"><button class="button primary" data-copy-value="@CurlCommand"><Icon Name="copy" /> Copy command</button></div>
+    </Modal>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    private SessionSnapshot? snapshot;
+    private Caller caller = new(null);
+    private bool loading = true, ended, busy, filesTab, showEditor, showEnd, showExpiry, conflict, disposed;
+    private TerminalShell terminalShell = TerminalShell.Bash;
+    private string? closedMessage, pageError, editorError, endError;
+    private string draftTitle = "", draftContent = "", draftLanguage = "text";
+    private int? editingNumber, curlNumber;
+    private Guid? editingVersion;
+    private TextSnapshot? latest, deleteText;
+    private FileSnapshot? deleteFile;
+    private string? curlFileName;
+    private int extendHours = 1;
+    private readonly CancellationTokenSource stop = new();
+    private readonly SemaphoreSlim refresh = new(1, 1);
+    private Task? ticker;
+    private Guid sessionId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        caller = BrowserIdentity.Caller((await Authentication.GetAuthenticationStateAsync()).User);
+        Changes.Changed += OnChanged;
+        await Reload();
+        ticker = Tick();
+    }
+    private async Task Tick()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try { while (await timer.WaitForNextTickAsync(stop.Token)) await InvokeAsync(Reload); }
+        catch (OperationCanceledException) { }
+    }
+    private void OnChanged(Guid id) { if (id == sessionId && !disposed) _ = RefreshNotification(); }
+    private async Task RefreshNotification()
+    {
+        try { await InvokeAsync(Reload); } catch (OperationCanceledException) { } catch (ObjectDisposedException) { }
+    }
+    private async Task Reload()
+    {
+        if (disposed || ended) return;
+        await refresh.WaitAsync(stop.Token);
+        try
+        {
+            snapshot = await Sessions.GetAsync(Code, caller, stop.Token);
+            sessionId = snapshot.Id;
+        }
+        catch (ShareItException ex)
+        {
+            if (ex.Status == 403 && sessionId == Guid.Empty) Navigation.NavigateTo("/?join=" + Uri.EscapeDataString(Code), true);
+            else { snapshot = null; closedMessage = ex.Message; showEditor = showEnd = showExpiry = false; draftContent = ""; }
+        }
+        finally { loading = false; refresh.Release(); }
+        if (!disposed) StateHasChanged();
+    }
+    private void Edit(TextSnapshot? card)
+    {
+        editingNumber = card?.Number; editingVersion = card?.Version;
+        draftTitle = card?.Title ?? ""; draftContent = card?.Content ?? ""; draftLanguage = card?.Language ?? "text";
+        editorError = null; conflict = false; latest = null; showEditor = true;
+    }
+    private void CloseEditor() { showEditor = false; draftContent = ""; }
+    private async Task SaveText()
+    {
+        if (snapshot == null || busy) return;
+        busy = true; editorError = null;
+        try { await Texts.SaveAsync(snapshot.Id, caller, editingNumber, editingVersion, draftTitle, draftContent, draftLanguage); showEditor = false; draftContent = ""; await Reload(); await Toast("Text saved. Ready on your other machines."); }
+        catch (ShareItException ex) { editorError = ex.Message; if (ex.Status == 409) { conflict = true; await Reload(); latest = snapshot?.Texts.SingleOrDefault(x => x.Number == editingNumber); } }
+        finally { busy = false; }
+    }
+    private async Task SaveAsNew() { editingNumber = null; editingVersion = null; conflict = false; await SaveText(); }
+    private async Task ReplaceLatest() { editingVersion = latest?.Version; conflict = false; await SaveText(); }
+    private void ConfirmDeleteText(TextSnapshot card) => deleteText = card;
+    private void ConfirmDeleteFile(FileSnapshot file) => deleteFile = file;
+    private void CancelDelete() { deleteText = null; deleteFile = null; }
+    private async Task Delete()
+    {
+        if (snapshot == null || busy) return;
+        busy = true;
+        try { if (deleteText != null) await Texts.DeleteAsync(snapshot.Id, caller, deleteText.Number, deleteText.Version); if (deleteFile != null) await Files.DeleteAsync(snapshot.Id, caller, deleteFile.Number); CancelDelete(); await Reload(); }
+        catch (ShareItException ex) { pageError = ex.Message; CancelDelete(); }
+        finally { busy = false; }
+    }
+    private async Task End(bool deleteNow)
+    {
+        if (snapshot == null || busy) return;
+        busy = true;
+        var expiry = snapshot.ExpiresAtUtc;
+        try { await Sessions.EndAsync(snapshot.Id, caller, deleteNow); ended = true; snapshot = null; draftContent = ""; showEnd = false; closedMessage = deleteNow ? "Session closed for everyone. Deletion has started." : $"Session closed for everyone. Its data will be deleted after {expiry:dd MMM, HH:mm} UTC."; }
+        catch (ShareItException ex) { endError = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Extend()
+    {
+        if (snapshot == null || busy) return;
+        busy = true;
+        try { await Sessions.ChangeExpiryAsync(snapshot.Id, caller, extendHours); showExpiry = false; await Reload(); await Toast("Session expiry updated."); }
+        catch (ShareItException ex) { pageError = ex.Message; showExpiry = false; }
+        finally { busy = false; }
+    }
+    private void ShowTextCurl(int number) { curlNumber = number; curlFileName = null; }
+    private void ShowFileCurl(FileSnapshot file) { curlNumber = file.Number; curlFileName = file.Name; }
+    private string CurlCommand => CurlCommands.Create(Navigation.BaseUri, snapshot!.Code, curlNumber!.Value, curlFileName, terminalShell);
+    private async Task Toast(string text) => await JS.InvokeVoidAsync("shareIt.toast", text);
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true; Changes.Changed -= OnChanged; await stop.CancelAsync();
+        if (ticker != null) { try { await ticker; } catch (OperationCanceledException) { } }
+        stop.Dispose();
+    }
+}

@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ShareIt__TrustedProxy: 172.30.12.2
+      AllowedHosts: ${SHAREIT_DOMAIN:?Set SHAREIT_DOMAIN in deploy/.env}
+    volumes:
+      - app_data:/data
+      - app_secrets:/keys
+    networks:
+      - shareit
+    mem_limit: 1g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SHAREIT_DOMAIN: ${SHAREIT_DOMAIN:?Set SHAREIT_DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      shareit:
+        ipv4_address: 172.30.12.2
+    depends_on:
+      - app
+volumes:
+  app_data:
+  app_secrets:
+  caddy_data:
+  caddy_config:
+networks:
+  shareit:
+    ipam:
+      config:
+        - subnet: 172.30.12.0/24

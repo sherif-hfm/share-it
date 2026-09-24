@@ -1,0 +1,97 @@
+@page "/"
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+<PageTitle>Share-It — Your workspace, across machines.</PageTitle>
+
+<section class="home">
+    <div class="home-story">
+        <div class="eyebrow hero-eyebrow"><span class="line-accent"></span> YOUR WORKSPACE, ACROSS MACHINES</div>
+        <h1>@T["HomeTitleOne"]<br /><span class="accent">@T["HomeTitleTwo"]</span></h1>
+        <p class="hero-description">Commands, configurations, and the little things.<br class="desktop-break" /> Get them from this machine to that one.</p>
+        <div class="hero-features"><span><Icon Name="check" /> No account needed</span><span><Icon Name="clock" /> Gone when you're done</span></div>
+        <div class="transfer-illustration" aria-hidden="true">
+            <div class="mini-window source"><div class="mini-title"><span class="window-dots">•••</span><span>your machine</span><Icon Name="monitor" Size="13" /></div><div class="mini-code"><span class="code-muted">$</span> <span class="code-accent">share</span> something<br /><span class="code-muted">↳</span> deploy.sh<span class="code-cursor"></span></div><div class="mini-tag"><span class="status-dot"></span> Ready to share</div></div>
+            <div class="transfer-line"><span></span><div class="transfer-node"><Icon Name="arrow" /></div><span></span></div>
+            <div class="mini-window destination"><div class="mini-title"><span class="window-dots">•••</span><span>any machine</span><Icon Name="monitor" Size="13" /></div><div class="mini-file"><div class="file-symbol"><Icon Name="terminal" /></div><div><strong>deploy.sh</strong><small>Right where you need it.</small></div><Icon Name="check" Size="16" /></div></div>
+        </div>
+        <p class="works-everywhere">WINDOWS <span>·</span> LINUX <span>·</span> MACOS <span>·</span> YOUR NEXT VM</p>
+    </div>
+
+    <div class="entry-card">
+        <div class="entry-tabs" role="tablist" aria-label="Session action">
+            <button role="tab" aria-selected="@(!joining)" class="@(!joining ? "active" : "")" @onclick="() => Switch(false)"><Icon Name="plus" /> Start a session</button>
+            <button role="tab" aria-selected="@joining" class="@(joining ? "active" : "")" @onclick="() => Switch(true)"><Icon Name="link" /> Join a session</button>
+        </div>
+        <div class="entry-body">
+            @if (!joining)
+            {
+                <div class="entry-emblem"><Icon Name="plus" Size="26" /></div>
+                <h2>A fresh space to share.</h2>
+                <p>Create a private session. Open it anywhere<br class="desktop-break" /> with a short code and a 4-digit PIN.</p>
+                <label class="field-label" for="lifetime">SESSION LIFETIME <span>Auto-deletes after expiry</span></label>
+                <div class="select-shell"><Icon Name="clock" /><select id="lifetime" @bind="minutes"><option value="60">1 hour</option><option value="240">4 hours</option><option value="480">8 hours</option><option value="1440">24 hours</option></select><Icon Name="chevron" /></div>
+                <AppButton Class="full-width start-button" OnClick="Create" Busy="busy"><span>Create session</span><Icon Name="arrow" /></AppButton>
+                <div class="entry-footnote"><Icon Name="shield" Size="15" /><span>A code + PIN. Just for the people you share with.</span></div>
+            }
+            else
+            {
+                <div class="entry-emblem"><Icon Name="link" Size="26" /></div>
+                <h2>Pick up where you left off.</h2>
+                <p>Enter the code and PIN from your other machine.</p>
+                <form @onsubmit="Join" @onsubmit:preventDefault>
+                    <FormField Id="join-code" Label="@T["SessionCode"]"><input id="join-code" class="code-input" placeholder="w3r-yub" maxlength="7" autocomplete="off" spellcheck="false" @bind="code" /></FormField>
+                    <label class="field-label" for="join-pin">4-DIGIT PIN</label>
+                    <div class="pin-input-wrap"><input id="join-pin" type="@(showPin ? "text" : "password")" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="off" @bind="pin" /><button type="button" class="icon-button" @onclick="() => showPin = !showPin" aria-label="@(showPin ? "Hide PIN" : "Reveal PIN")"><Icon Name="eye" /></button></div>
+                    <AppButton Type="submit" Class="full-width start-button" Busy="busy"><span>Join session</span><Icon Name="arrow" /></AppButton>
+                </form>
+            }
+            @if (error != null) { <p class="inline-error" role="alert">@error</p> }
+        </div>
+        <div class="entry-bottom"><Icon Name="terminal" Size="16" /><span>Terminal person? Works with <code>curl</code>, too.</span></div>
+    </div>
+</section>
+
+<section class="how-it-works" id="how-it-works" aria-label="How Share-It works">
+    <div class="how-step"><span class="step-number">01</span><div><h3>Start a session</h3><p>A short code. A four-digit PIN. You're in.</p></div></div>
+    <div class="how-step"><span class="step-number">02</span><div><h3>Drop in what you need</h3><p>Text, commands, configs, and small files.</p></div></div>
+    <div class="how-step"><span class="step-number">03</span><div><h3>Open it anywhere</h3><p>Another browser, another VM, or your terminal.</p></div></div>
+</section>
+
+@if (created != null)
+{
+    <Modal Title="Your session is ready." Eyebrow="MAKE THE CONNECTION" OnCancel="OpenCreated">
+        <p class="modal-description">Use these on your other machine. Remember the PIN — we only show it here.</p>
+        <div class="credentials"><div><label>SESSION CODE</label><button data-copy-value="@created.Code"><strong>@created.Code</strong><Icon Name="copy" /></button></div><div><label>4-DIGIT PIN</label><button data-copy-value="@created.Pin"><strong>@created.Pin</strong><Icon Name="copy" /></button></div></div>
+        <p class="field-hint"><Icon Name="clock" Size="15" /> Your session will expire automatically.</p>
+        <div class="modal-actions"><AppButton OnClick="OpenCreated" Icon="arrow">Open workspace</AppButton></div>
+    </Modal>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "join")] public string? JoinCode { get; set; }
+    private bool joining, busy, showPin;
+    private int minutes = 60;
+    private string code = "", pin = "";
+    private string? error;
+    private CreatedSession? created;
+    protected override void OnParametersSet() { if (!string.IsNullOrWhiteSpace(JoinCode)) { joining = true; code = JoinCode; } }
+    private void Switch(bool join) { joining = join; error = null; }
+    private async Task Create()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try { created = await JS.InvokeAsync<CreatedSession>("shareIt.create", minutes); }
+        catch (JSException ex) { error = Friendly(ex.Message); }
+        finally { busy = false; }
+    }
+    private async Task Join()
+    {
+        if (busy) return;
+        if (SessionCode.Normalize(code) == "" || !SessionCode.IsPin(pin)) { error = "Enter a six-character code and a four-digit PIN."; return; }
+        busy = true; error = null;
+        try { await JS.InvokeVoidAsync("shareIt.join", code, pin); Navigation.NavigateTo("/s/" + SessionCode.Format(SessionCode.Normalize(code)), true); }
+        catch (JSException ex) { error = Friendly(ex.Message); busy = false; }
+    }
+    private void OpenCreated() { if (created != null) Navigation.NavigateTo("/s/" + created.Code, true); }
+    private static string Friendly(string message) => message.Split('\n')[0].Replace("Error: ", "");
+}

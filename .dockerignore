@@ -1,0 +1,7 @@
+**/bin
+**/obj
+**/.runtime
+.artifacts
+.git
+.env
+TestResults

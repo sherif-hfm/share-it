@@ -1,0 +1,15 @@
+<Modal Title="End this session?" Eyebrow="WRAP THINGS UP" OnCancel="OnCancel" Class="compact-modal">
+    <p class="modal-description">This closes the workspace for everyone. A closed session cannot be reopened.</p>
+    <label class="checkbox-card"><input type="checkbox" @bind="deleteNow" /><span><strong>Delete all text and files now</strong><small>Start removing everything from this session.</small></span></label>
+    @if (!deleteNow) { <p class="retention-note"><Icon Name="clock" /> Data will stay inaccessible until @ExpiresAtUtc.ToString("dd MMM yyyy, HH:mm 'UTC'"). It will then be deleted automatically.</p> }
+    @if (Error != null) { <p class="inline-error" role="alert">@Error</p> }
+    <div class="modal-actions"><AppButton Kind="secondary" OnClick="OnCancel" Disabled="Busy" data-autofocus="true">Keep working</AppButton><AppButton Kind="danger" OnClick="() => OnEnd.InvokeAsync(deleteNow)" Busy="Busy">End session</AppButton></div>
+</Modal>
+@code {
+    [Parameter] public DateTime ExpiresAtUtc { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<bool> OnEnd { get; set; }
+    private bool deleteNow = true;
+}

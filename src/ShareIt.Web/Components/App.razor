@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="A temporary workspace for sharing text, commands, and files across your machines. No account required." />
+    <base href="/" />
+    <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/themes.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script src="js/theme.js"></script>
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+</head>
+<body>
+    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+    <script src="js/shareit.js"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+<resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+<resheader name="version"><value>2.0</value></resheader>
+<data name="StartSession" xml:space="preserve"><value>Start a session</value></data>
+<data name="JoinSession" xml:space="preserve"><value>Join a session</value></data>
+<data name="CreateSession" xml:space="preserve"><value>Create session</value></data>
+<data name="OpenWorkspace" xml:space="preserve"><value>Open workspace</value></data>
+<data name="SaveText" xml:space="preserve"><value>Save text</value></data>
+<data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+<data name="EndSession" xml:space="preserve"><value>End session</value></data>
+<data name="AddText" xml:space="preserve"><value>Add text</value></data>
+<data name="SessionCode" xml:space="preserve"><value>SESSION CODE</value></data>
+<data name="Pin" xml:space="preserve"><value>4-DIGIT PIN</value></data>
+<data name="Title" xml:space="preserve"><value>TITLE</value></data>
+<data name="Content" xml:space="preserve"><value>CONTENT</value></data>
+<data name="Format" xml:space="preserve"><value>FORMAT</value></data>
+<data name="Files" xml:space="preserve"><value>Files</value></data>
+<data name="TextSnippets" xml:space="preserve"><value>Text &amp; snippets</value></data>
+<data name="HomeTitleOne" xml:space="preserve"><value>One session.</value></data>
+<data name="HomeTitleTwo" xml:space="preserve"><value>Every machine.</value></data>
+<data name="Tagline" xml:space="preserve"><value>Your workspace, across machines.</value></data>
+<data name="Connected" xml:space="preserve"><value>Connected</value></data>
+</root>

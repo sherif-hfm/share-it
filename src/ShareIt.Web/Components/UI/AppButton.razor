@@ -1,0 +1,16 @@
+<button type="@Type" class="button @Kind @Class" disabled="@(Disabled || Busy)" @onclick="OnClick" @attributes="Attributes">
+    @if (Busy) { <span class="spinner" aria-hidden="true"></span> }
+    else if (Icon != null) { <ShareIt.Web.Components.UI.Icon Name="@Icon" /> }
+    @ChildContent
+</button>
+@code {
+    [Parameter] public string Type { get; set; } = "button";
+    [Parameter] public string Kind { get; set; } = "primary";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Attributes { get; set; }
+}

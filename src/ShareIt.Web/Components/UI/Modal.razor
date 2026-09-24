@@ -1,0 +1,26 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+<dialog @ref="dialog" class="modal @Class" aria-labelledby="@titleId">
+    <header class="modal-header"><div><span class="eyebrow">@Eyebrow</span><h2 id="@titleId">@Title</h2></div><button class="icon-button" @onclick="OnCancel" data-dialog-close aria-label="Close dialog"><Icon Name="close" /></button></header>
+    @ChildContent
+    <div class="dialog-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+</dialog>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Eyebrow { get; set; } = "SHARE-IT";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private ElementReference dialog;
+    private readonly string titleId = "dialog-" + Guid.NewGuid().ToString("N");
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await JS.InvokeVoidAsync("shareIt.openDialog", dialog, titleId);
+    }
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("shareIt.closeDialog", titleId); }
+        catch (JSDisconnectedException) { }
+        catch (TaskCanceledException) { }
+    }
+}

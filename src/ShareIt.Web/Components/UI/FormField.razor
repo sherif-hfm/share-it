@@ -1,0 +1,7 @@
+<div class="form-field"><label class="field-label" for="@Id">@Label @if (Hint != null) { <span>@Hint</span> }</label>@ChildContent</div>
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

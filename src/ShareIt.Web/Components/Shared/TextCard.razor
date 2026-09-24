@@ -1,0 +1,14 @@
+<article class="text-card">
+    <div class="text-card-top"><div class="card-title"><span class="text-icon"><Icon Name="@(Card.Language == "text" ? "file" : "terminal")" /></span><h3>@Card.Title</h3></div><span class="language-badge">@LanguageLabel</span></div>
+    <pre class="card-content @(wrap ? "wrapped" : "")">@Card.Content</pre>
+    <div class="text-card-bottom"><button class="copy-button" data-copy-b64="@Encoded"><Icon Name="copy" Size="15" /> Copy text</button><div class="card-tools"><button class="small-button" @onclick="() => OnCurl.InvokeAsync(Card.Number)"><Icon Name="terminal" Size="14" /> curl</button><button class="icon-button small" @onclick="() => wrap = !wrap" aria-label="Toggle line wrapping" aria-pressed="@wrap"><Icon Name="wrap" Size="15" /></button><button class="icon-button small" @onclick="() => OnEdit.InvokeAsync(Card)" aria-label="@($"Edit {Card.Title}")"><Icon Name="edit" Size="15" /></button><button class="icon-button small danger-hover" @onclick="() => OnDelete.InvokeAsync(Card)" aria-label="@($"Delete {Card.Title}")"><Icon Name="trash" Size="15" /></button></div></div>
+</article>
+@code {
+    [Parameter, EditorRequired] public TextSnapshot Card { get; set; } = default!;
+    [Parameter] public EventCallback<TextSnapshot> OnEdit { get; set; }
+    [Parameter] public EventCallback<TextSnapshot> OnDelete { get; set; }
+    [Parameter] public EventCallback<int> OnCurl { get; set; }
+    private bool wrap;
+    private string Encoded => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Card.Content));
+    private string LanguageLabel => Card.Language switch { "powershell" => "PowerShell", "bash" => "Bash", "json" => "JSON", "yaml" => "YAML", _ => "Plain text" };
+}

@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Share-It home"><img src="brand/mark.svg" alt="" width="34" height="34" /><span>share<span class="brand-dash">-</span>it<span class="brand-dot">.</span></span></a>
+        <div class="topbar-right"><span class="topbar-note"><span class="status-dot"></span> A little less back-and-forth.</span><span class="divider"></span><button class="icon-button theme-toggle" @onclick="CycleTheme" aria-label="Change color theme" title="Dark, light, or system theme"><Icon Name="sun" /></button></div>
+    </header>
+    <main id="main" tabindex="-1">@Body</main>
+    <footer class="footer"><span>Made for the space between machines.</span><span class="footer-meta">No account. Just a connection.<span class="tiny-brand">S↗</span></span></footer>
+</div>
+<ToastHost />
+<ConnectionStatus />
+<div id="blazor-error-ui">Something interrupted this connection. Copy any draft before <a href="/">starting again</a>.</div>
+
+@code {
+    private async Task CycleTheme() => await JS.InvokeVoidAsync("shareIt.cycleTheme");
+}

@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.runtime/
+.artifacts/
+.env
+*.user
+*.db
+*.db-shm
+*.db-wal
+TestResults/
+playwright-report/

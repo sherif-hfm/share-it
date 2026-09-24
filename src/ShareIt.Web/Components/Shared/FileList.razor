@@ -1,0 +1,65 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject ShareItLimits Limits
+<section class="file-panel" aria-labelledby="files-heading">
+    <div class="section-heading"><h2 id="files-heading">Files <span class="count-badge">@Files.Count</span></h2><span class="muted small-text">@FormatBytes(TotalBytes) / @FormatBytes(Limits.MaxSessionFileBytes)</span></div>
+    <div class="file-surface">
+        <div class="dropzone" @ref="dropzone"><div class="upload-symbol"><Icon Name="upload" Size="25" /></div><h3>Drop files here</h3><p>or <button type="button" class="text-link" data-browse-input="@inputId">browse your files</button></p><span class="dropzone-limit">Up to @FormatBytes(Limits.MaxFileBytes) per file</span><input id="@inputId" type="file" multiple class="visually-hidden" aria-label="Upload files" /></div>
+        @if (uploads.Count > 0)
+        {
+            <div class="upload-progress-list" aria-live="polite">
+                @foreach (var u in uploads.Values)
+                {
+                    <div class="upload-progress"><div><span>@u.Name</span><span>@(u.State == "uploading" ? $"{u.Percent}%" : u.State)</span></div>@if (u.State == "uploading") { <progress value="@u.Percent" max="100" aria-label="@($"Uploading {u.Name}")"></progress> }@if (!string.IsNullOrEmpty(u.Message)) { <p class="inline-error">@u.Message</p> }</div>
+                }
+                @if (uploads.Values.Any(x => x.State == "uploading")) { <button class="small-button" @onclick="CancelUpload">Cancel upload</button> }
+            </div>
+        }
+        @if (Files.Count == 0)
+        {
+            <div class="files-empty"><Icon Name="folder" Size="21" /><p>A home for your configs,<br />scripts, and small essentials.</p></div>
+        }
+        else
+        {
+            <div class="file-rows">
+                @foreach (var file in Files)
+                {
+                    <div class="file-row" @key="file.Number"><div class="file-type-icon"><Icon Name="file" /></div><div class="file-details"><strong title="@file.Name">@file.Name</strong><span>@FormatBytes(file.Size)</span></div><a class="icon-button small" href="@($"/api/v1/sessions/{Code}/files/{file.Number}")" download="@file.Name" aria-label="@($"Download {file.Name}")"><Icon Name="download" Size="16" /></a><button class="icon-button small" @onclick="() => OnCurl.InvokeAsync(file)" aria-label="@($"Copy curl command for {file.Name}")"><Icon Name="terminal" Size="16" /></button><button class="icon-button small danger-hover" @onclick="() => OnDelete.InvokeAsync(file)" aria-label="@($"Delete {file.Name}")"><Icon Name="trash" Size="16" /></button></div>
+                }
+            </div>
+        }
+        <div class="storage-meter"><div><span style="@($"width:{Math.Clamp(TotalBytes * 100d / Limits.MaxSessionFileBytes, 0, 100).ToString(CultureInfo.InvariantCulture)}%")"></span></div><p><Icon Name="clock" Size="13" /> Files are automatically removed after expiry.</p></div>
+    </div>
+    <div class="terminal-tip"><span class="terminal-tip-icon"><Icon Name="terminal" Size="19" /></span><div><h3>Bring your terminal along.</h3><p>Use the curl action on any item.<br />Your PIN stays out of the command.</p></div></div>
+</section>
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    [Parameter] public IReadOnlyList<FileSnapshot> Files { get; set; } = [];
+    [Parameter] public long TotalBytes { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<FileSnapshot> OnDelete { get; set; }
+    [Parameter] public EventCallback<FileSnapshot> OnCurl { get; set; }
+    private ElementReference dropzone;
+    private readonly string inputId = "files-" + Guid.NewGuid().ToString("N");
+    private DotNetObjectReference<FileList>? reference;
+    private readonly Dictionary<string, UploadItem> uploads = [];
+    private sealed record UploadItem(string Name, int Percent, string State, string Message);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { reference = DotNetObjectReference.Create(this); await JS.InvokeVoidAsync("shareIt.attachUploads", dropzone, inputId, Code, Limits.MaxFileBytes, reference); }
+    }
+    [JSInvokable] public async Task UploadProgress(string id, string name, int percent, string state, string message)
+    {
+        uploads[id] = new(name, percent, state, message);
+        if (state == "complete") await OnChanged.InvokeAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task CancelUpload() => await JS.InvokeVoidAsync("shareIt.cancelUploads", inputId);
+    private static string FormatBytes(long size) => size >= 1_000_000 ? $"{size / 1_000_000d:0.#} MB" : size >= 1000 ? $"{size / 1000d:0.#} KB" : $"{size} B";
+    public async ValueTask DisposeAsync()
+    {
+        if (reference == null) return;
+        try { await JS.InvokeVoidAsync("shareIt.detachUploads", inputId); } catch (JSDisconnectedException) { } catch (TaskCanceledException) { }
+        reference?.Dispose();
+    }
+}

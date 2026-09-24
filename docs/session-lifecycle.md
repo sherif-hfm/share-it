@@ -3,6 +3,7 @@
 | Trigger | Access | Contents |
 |---|---|---|
 | Create | Code + PIN joins the session | Empty workspace; default expiry in one hour |
+| Close the new-session dialog (X or Escape) | Immediately closed; stay on the home page | Purge requested immediately; a failed cancellation keeps the dialog open for retry |
 | Change expiry | Any granted browser, while active | At most 24 hours from creation |
 | End, delete selected | Immediately closed | Text cleared and purge requested immediately |
 | End, delete unselected | Immediately closed permanently | Inaccessible until the expiry fixed at closure |

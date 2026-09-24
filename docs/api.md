@@ -6,6 +6,7 @@ All production requests use HTTPS. Private responses specify `Cache-Control: no-
 |---|---|---|
 | GET `/api/antiforgery` | Anonymous | Establish antiforgery cookie and return request token |
 | POST `/api/v1/sessions` | Antiforgery | `{ "minutes": 60 }`; return code, PIN, immutable ID, and expiry; set browser cookie |
+| POST `/api/v1/sessions/{id}/cancel` | Browser grant + antiforgery | Cancel from the new-session dialog using its immutable ID; close access and request immediate purge; safe to retry after removal |
 | POST `/api/v1/join` | Antiforgery | `{ "code": "w3r-yub", "pin": "0047" }`; grant access and set browser cookie |
 | GET `/api/v1/sessions/{code}` | Browser grant or Basic | Manifest containing stable text/file numbers and metadata |
 | GET `/api/v1/sessions/{code}/texts/{number}/raw` | Browser grant or Basic | Exact UTF-8 saved content |
@@ -13,7 +14,7 @@ All production requests use HTTPS. Private responses specify `Cache-Control: no-
 | POST `/api/v1/sessions/{code}/files` | Browser grant + antiforgery | One streaming multipart file; `X-File-Size` gives expected byte length |
 | GET `/health` | Anonymous | Process readiness |
 
-Browser mutations send `X-CSRF-TOKEN`. A new token is fetched after identity changes. Text editing, expiry changes, and session closure use authorized Blazor application-service calls; there is no write-capable curl interface in v1.
+Browser mutations send `X-CSRF-TOKEN`. A new token is fetched after identity changes. Text editing, expiry changes, and workspace session closure use authorized Blazor application-service calls. Cancelling the new-session dialog uses HTTP so it sees the browser cookie issued during creation. Basic credentials remain read-only.
 
 Basic credentials are the session code and four-digit PIN. Codes ignore hyphens and letter case; PINs are strings with exactly four ASCII digits. Failed attempts use a generic message. Item numbers are unique within a session and are never reassigned.
 

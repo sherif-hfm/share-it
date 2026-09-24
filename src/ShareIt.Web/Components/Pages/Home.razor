@@ -59,11 +59,13 @@
 
 @if (created != null)
 {
-    <Modal Title="Your session is ready." Eyebrow="MAKE THE CONNECTION" OnCancel="OpenCreated">
+    <Modal Title="Your session is ready." Eyebrow="MAKE THE CONNECTION" OnCancel="CancelCreated" CancelDisabled="busy">
         <p class="modal-description">Use these on your other machine. Remember the PIN — we only show it here.</p>
         <div class="credentials"><div><label>SESSION CODE</label><button data-copy-value="@created.Code"><strong>@created.Code</strong><Icon Name="copy" /></button></div><div><label>4-DIGIT PIN</label><button data-copy-value="@created.Pin"><strong>@created.Pin</strong><Icon Name="copy" /></button></div></div>
         <p class="field-hint"><Icon Name="clock" Size="15" /> Your session will expire automatically.</p>
-        <div class="modal-actions"><AppButton OnClick="OpenCreated" Icon="arrow">Open workspace</AppButton></div>
+        <p class="field-hint">Closing this dialog cancels the session.</p>
+        @if (cancelError != null) { <p class="inline-error" role="alert">@cancelError</p> }
+        <div class="modal-actions"><AppButton OnClick="OpenCreated" Icon="arrow" Disabled="busy">Open workspace</AppButton></div>
     </Modal>
 }
 
@@ -72,14 +74,14 @@
     private bool joining, busy, showPin;
     private int minutes = 60;
     private string code = "", pin = "";
-    private string? error;
+    private string? error, cancelError;
     private CreatedSession? created;
     protected override void OnParametersSet() { if (!string.IsNullOrWhiteSpace(JoinCode)) { joining = true; code = JoinCode; } }
     private void Switch(bool join) { joining = join; error = null; }
     private async Task Create()
     {
         if (busy) return;
-        busy = true; error = null;
+        busy = true; error = null; cancelError = null;
         try { created = await JS.InvokeAsync<CreatedSession>("shareIt.create", minutes); }
         catch (JSException ex) { error = Friendly(ex.Message); }
         finally { busy = false; }
@@ -92,6 +94,14 @@
         try { await JS.InvokeVoidAsync("shareIt.join", code, pin); Navigation.NavigateTo("/s/" + SessionCode.Format(SessionCode.Normalize(code)), true); }
         catch (JSException ex) { error = Friendly(ex.Message); busy = false; }
     }
-    private void OpenCreated() { if (created != null) Navigation.NavigateTo("/s/" + created.Code, true); }
+    private async Task CancelCreated()
+    {
+        if (created == null || busy) return;
+        busy = true; cancelError = null;
+        try { await JS.InvokeVoidAsync("shareIt.cancelCreated", created.Id); created = null; }
+        catch (JSException ex) { cancelError = "Could not cancel the session. " + Friendly(ex.Message); }
+        finally { busy = false; }
+    }
+    private void OpenCreated() { if (created != null && !busy) Navigation.NavigateTo("/s/" + created.Code, true); }
     private static string Friendly(string message) => message.Split('\n')[0].Replace("Error: ", "");
 }

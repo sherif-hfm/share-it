@@ -84,6 +84,68 @@ public class BrowserTests(BrowserFixture fixture)
     }
 
     [Fact]
+    public async Task Created_session_cancellation_failure_keeps_credentials_and_allows_retry()
+    {
+        await using var context = await fixture.Browser.NewContextAsync();
+        var page = await Page(context);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Create session", Exact = true }).ClickAsync();
+        var dialog = page.GetByRole(AriaRole.Dialog);
+        await dialog.WaitForAsync();
+        var credentials = await dialog.Locator(".credentials strong").AllTextContentsAsync();
+        var cancellation = new TaskCompletionSource<IRoute>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await page.RouteAsync("**/api/v1/sessions/*/cancel", route => { cancellation.TrySetResult(route); return Task.CompletedTask; });
+        var close = dialog.GetByRole(AriaRole.Button, new() { Name = "Close dialog", Exact = true });
+        await close.ClickAsync();
+        var pending = await cancellation.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Assertions.Expect(close).ToBeDisabledAsync();
+        await Assertions.Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Open workspace" })).ToBeDisabledAsync();
+        await page.Keyboard.PressAsync("Escape");
+        await pending.FulfillAsync(new() { Status = 503, ContentType = "application/json", Body = "{\"detail\":\"Please try again.\"}" });
+        await Assertions.Expect(dialog.GetByRole(AriaRole.Alert)).ToContainTextAsync("Could not cancel the session.");
+        Assert.Equal(credentials, await dialog.Locator(".credentials strong").AllTextContentsAsync());
+        await Assertions.Expect(close).ToBeEnabledAsync();
+        await page.UnrouteAsync("**/api/v1/sessions/*/cancel");
+        await close.ClickAsync();
+        await Assertions.Expect(dialog).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator(".home")).ToBeVisibleAsync();
+        await page.GotoAsync(fixture.Url + "/s/" + credentials[0]);
+        await Assertions.Expect(page.Locator(".closed-state")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Start a new session" })).ToBeVisibleAsync();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Dismissing_created_session_cancels_it_without_opening_workspace(bool escape)
+    {
+        await using var context = await fixture.Browser.NewContextAsync();
+        var page = await Page(context);
+        var homeUrl = page.Url;
+        var create = page.GetByRole(AriaRole.Button, new() { Name = "Create session", Exact = true });
+        await create.ClickAsync();
+        var dialog = page.GetByRole(AriaRole.Dialog);
+        await dialog.WaitForAsync();
+        var credentials = await dialog.Locator(".credentials strong").AllTextContentsAsync();
+        if (escape) await page.Keyboard.PressAsync("Escape");
+        else await dialog.GetByRole(AriaRole.Button, new() { Name = "Close dialog", Exact = true }).ClickAsync();
+        await Assertions.Expect(dialog).ToHaveCountAsync(0);
+        Assert.Equal(homeUrl, page.Url);
+        await Assertions.Expect(create).ToBeFocusedAsync();
+
+        await using var other = await fixture.Browser.NewContextAsync();
+        var join = await Page(other);
+        await join.GetByRole(AriaRole.Tab, new() { Name = "Join a session" }).ClickAsync();
+        await join.GetByLabel("SESSION CODE", new() { Exact = true }).FillAsync(credentials[0]);
+        await join.GetByLabel("4-DIGIT PIN", new() { Exact = true }).FillAsync(credentials[1]);
+        await join.GetByRole(AriaRole.Button, new() { Name = "Join session", Exact = true }).ClickAsync();
+        await Assertions.Expect(join.GetByRole(AriaRole.Alert)).ToBeVisibleAsync();
+        await Assertions.Expect(join.Locator(".workspace")).ToHaveCountAsync(0);
+        var replacement = await Create(page);
+        Assert.NotEqual(credentials[0], replacement.Code);
+        await Assertions.Expect(page.Locator(".workspace")).ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task Two_browsers_share_text_files_and_receive_session_closure()
     {
         await using var first = await fixture.Browser.NewContextAsync(new() { ViewportSize = new() { Width = 1440, Height = 1000 } });

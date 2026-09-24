@@ -24,6 +24,16 @@ public static class SessionEndpoints
             return Results.Ok(result);
         }).RequireRateLimiting("create");
 
+        app.MapPost("/api/v1/sessions/{id:guid}/cancel", async (Guid id, HttpContext ctx, IAntiforgery anti, SessionService sessions) =>
+        {
+            RequireIdentity(ctx);
+            await anti.ValidateRequestAsync(ctx);
+            // Use the fresh browser cookie; the home page's circuit can predate sign-in.
+            try { await sessions.EndAsync(id, BrowserIdentity.Caller(ctx.User), true, ctx.RequestAborted); }
+            catch (ShareItException ex) when (ex.Status == 404) { /* A previous cancellation may already have purged it. */ }
+            return Results.Ok(new { cancelled = true });
+        });
+
         app.MapPost("/api/v1/join", async (HttpContext ctx, IAntiforgery anti, CredentialGuard guard, SessionService sessions, JoinRequest request) =>
         {
             await anti.ValidateRequestAsync(ctx);

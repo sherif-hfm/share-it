@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ShareIt.Core.Contracts;
 using ShareIt.Core.DTOs;
+using ShareIt.Core.Models;
 using ShareIt.Core.Services;
 using ShareIt.Infrastructure.BackgroundJobs;
 
@@ -68,6 +69,50 @@ public class ApiTests
         (await second.PostAsJsonAsync("/api/v1/join", new { session.Code, session.Pin })).EnsureSuccessStatusCode();
         (await second.GetAsync($"/api/v1/sessions/{session.Code}")).EnsureSuccessStatusCode();
         Assert.Equal(2, (await app.Services.GetRequiredService<IShareItPersistence>().FindAsync(session.Id))!.Grants.Count);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_created_session_revokes_access_requests_purge_and_can_be_retried()
+    {
+        await using var app = new AppFactory();
+        using var owner = app.Browser(); using var other = app.Browser();
+        var session = await app.CreateSession(owner);
+        await AppFactory.Csrf(owner);
+        var url = $"/api/v1/sessions/{session.Id}/cancel";
+        (await owner.PostAsJsonAsync(url, new { })).EnsureSuccessStatusCode();
+        var persistence = app.Services.GetRequiredService<IShareItPersistence>();
+        var stored = (await persistence.FindAsync(session.Id))!;
+        Assert.Equal(SessionStatus.Closed, stored.Status);
+        Assert.True(stored.Cleanup.PurgeRequested);
+        Assert.Empty(stored.PinHash);
+        Assert.Equal(HttpStatusCode.Gone, (await owner.GetAsync($"/api/v1/sessions/{session.Code}")).StatusCode);
+        await AppFactory.Csrf(other);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await other.PostAsJsonAsync("/api/v1/join", new { session.Code, session.Pin })).StatusCode);
+        (await owner.PostAsJsonAsync(url, new { })).EnsureSuccessStatusCode();
+        await app.Services.GetRequiredService<SessionPurgeService>().ProcessAsync(session.Id, false);
+        Assert.Null(await persistence.FindAsync(session.Id));
+        (await owner.PostAsJsonAsync(url, new { })).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Cancelling_requires_antiforgery_and_a_browser_grant()
+    {
+        await using var app = new AppFactory();
+        using var owner = app.Browser(); using var stranger = app.Browser(); using var anonymous = app.Browser();
+        var session = await app.CreateSession(owner);
+        var url = $"/api/v1/sessions/{session.Id}/cancel";
+        owner.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(url, new { })).StatusCode);
+        await AppFactory.Csrf(anonymous);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync(url, new { })).StatusCode);
+        await app.CreateSession(stranger);
+        await AppFactory.Csrf(stranger);
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsJsonAsync(url, new { })).StatusCode);
+        Basic(anonymous, session.Code, session.Pin);
+        Assert.False((await anonymous.PostAsJsonAsync(url, new { })).IsSuccessStatusCode);
+        var stored = (await app.Services.GetRequiredService<IShareItPersistence>().FindAsync(session.Id))!;
+        Assert.Equal(SessionStatus.Active, stored.Status);
+        Assert.False(stored.Cleanup.PurgeRequested);
     }
 
     [Fact]

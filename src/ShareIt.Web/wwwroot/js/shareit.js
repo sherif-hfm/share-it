@@ -157,6 +157,7 @@
   }
   window.shareIt = {
     create: minutes => request("/api/v1/sessions", { minutes }),
+    cancelCreated: id => request(`/api/v1/sessions/${encodeURIComponent(id)}/cancel`, {}),
     join: (code, pin) => request("/api/v1/join", { code, pin }),
     copy, toast, cycleTheme, attachUploads,
     openDialog: (dialog, key) => { const previous = lastTrigger?.isConnected ? lastTrigger : document.activeElement; dialogs.set(key, { dialog, previous }); dialog.addEventListener("cancel", e => { e.preventDefault(); dialog.querySelector("[data-dialog-close]")?.click(); }); if (!dialog.open) dialog.showModal(); (dialog.querySelector("[data-autofocus]") || dialog.querySelector("input,textarea"))?.focus(); },

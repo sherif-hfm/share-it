@@ -1,7 +1,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 <dialog @ref="dialog" class="modal @Class" aria-labelledby="@titleId">
-    <header class="modal-header"><div><span class="eyebrow">@Eyebrow</span><h2 id="@titleId">@Title</h2></div><button class="icon-button" @onclick="OnCancel" data-dialog-close aria-label="Close dialog"><Icon Name="close" /></button></header>
+    <header class="modal-header"><div><span class="eyebrow">@Eyebrow</span><h2 id="@titleId">@Title</h2></div><button class="icon-button" @onclick="OnCancel" disabled="@CancelDisabled" data-dialog-close aria-label="Close dialog"><Icon Name="close" /></button></header>
     @ChildContent
     <div class="dialog-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 </dialog>
@@ -10,6 +10,7 @@
     [Parameter] public string Eyebrow { get; set; } = "SHARE-IT";
     [Parameter] public string? Class { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public bool CancelDisabled { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     private ElementReference dialog;
     private readonly string titleId = "dialog-" + Guid.NewGuid().ToString("N");

@@ -11,7 +11,7 @@
         <h3 id="mount-install">1. Install once</h3>
         @if (platform == MountPlatform.Windows)
         {
-            <p>Install <a href="https://rclone.org/downloads/" target="_blank" rel="noopener noreferrer">rclone</a> and <a href="https://winfsp.dev/rel/" target="_blank" rel="noopener noreferrer">WinFsp</a>. Paste into <strong>PowerShell</strong>, without “Run as administrator”. If you are in CMD, enter <code>powershell</code> first. You can run this from the folder containing <code>rclone.exe</code>.</p>
+            <p>Install <a href="https://rclone.org/downloads/" target="_blank" rel="noopener noreferrer">rclone</a> and <a href="https://winfsp.dev/rel/" target="_blank" rel="noopener noreferrer">WinFsp</a>.</p>
         }
         else if (platform == MountPlatform.Linux)
         {
@@ -24,7 +24,15 @@
     </section>
     <section class="mount-step" aria-labelledby="mount-command">
         <h3 id="mount-command">2. Copy, paste, and enter your PIN</h3>
-        @if (platform == MountPlatform.Windows) { <p>Use an available drive letter; change <code>S:</code> if it is already in use.</p> }
+        @if (platform == MountPlatform.Windows)
+        {
+            <div class="mount-windows-note" role="note">
+                <strong>Open PowerShell without “Run as administrator”.</strong>
+                <p>Drives mounted as administrator may not appear in File Explorer. If your window title starts with “Administrator”, open a regular PowerShell window instead.</p>
+                <p>Already mounted as administrator? Press <kbd>Ctrl</kbd> + <kbd>C</kbd> in that window before running the command again.</p>
+            </div>
+            <p>You can run this from the folder containing <code>rclone.exe</code>. Use an available drive letter; change <code>S:</code> if it is already in use.</p>
+        }
         <button class="button primary mount-copy" data-copy-value="@Command"><Icon Name="copy" Size="14" /> Copy mount command</button>
         <details class="mount-command-details"><summary>View command</summary><pre class="curl-command mount-command">@Command</pre></details>
         <p class="field-hint">Keep this terminal running. Browse the <code>texts</code> and <code>files</code> folders. Browser changes appear after the 15-second directory cache expires and you refresh or reopen the item.</p>

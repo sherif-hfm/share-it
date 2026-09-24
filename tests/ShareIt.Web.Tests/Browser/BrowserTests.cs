@@ -153,6 +153,15 @@ public class BrowserTests(BrowserFixture fixture)
         var page = await Page(first);
         await page.ScreenshotAsync(new() { Path = Path.Combine(fixture.Artifacts, "home-dark.png"), FullPage = true });
         var session = await Create(page);
+        var hasRandomUUID = await page.EvaluateAsync<bool>("""
+            () => {
+                window.uploadUuidCalls = 0;
+                if (typeof crypto.randomUUID !== 'function') return false;
+                const randomUUID = crypto.randomUUID.bind(crypto);
+                crypto.randomUUID = () => { window.uploadUuidCalls++; return randomUUID(); };
+                return true;
+            }
+            """);
         await page.ScreenshotAsync(new() { Path = Path.Combine(fixture.Artifacts, "workspace-empty.png"), FullPage = true });
         var other = await Page(second);
         await other.GetByRole(AriaRole.Tab, new() { Name = "Join a session" }).ClickAsync();
@@ -168,6 +177,7 @@ public class BrowserTests(BrowserFixture fixture)
         await Assertions.Expect(other.GetByRole(AriaRole.Heading, new() { Name = "Deployment commands" })).ToBeVisibleAsync();
         await page.Locator("input[type=file]").SetInputFilesAsync(new FilePayload { Name = "appsettings.json", MimeType = "application/json", Buffer = Encoding.UTF8.GetBytes("{\"environment\":\"staging\",\"port\":8080}\n") });
         await Assertions.Expect(other.Locator(".file-details strong")).ToHaveTextAsync("appsettings.json");
+        if (hasRandomUUID) Assert.Equal(1, await page.EvaluateAsync<int>("window.uploadUuidCalls"));
         await page.ScreenshotAsync(new() { Path = Path.Combine(fixture.Artifacts, "workspace-populated.png"), FullPage = true });
         await other.GetByRole(AriaRole.Button, new() { Name = "End session", Exact = true }).ClickAsync();
         await other.GetByRole(AriaRole.Dialog).WaitForAsync();
@@ -175,6 +185,66 @@ public class BrowserTests(BrowserFixture fixture)
         await other.GetByRole(AriaRole.Dialog).GetByRole(AriaRole.Button, new() { Name = "End session", Exact = true }).ClickAsync();
         await Assertions.Expect(page.Locator(".closed-state")).ToBeVisibleAsync(new() { Timeout = 15000 });
         Assert.Empty(await page.Locator(".text-card").AllAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Uploads_without_randomUUID_keep_separate_progress_and_preserve_file_contents(bool blocksRandomUUID)
+    {
+        var serverUri = new Uri(fixture.Url);
+        var insecureOrigin = serverUri.Scheme == "http" && serverUri.IsLoopback;
+        var origin = insecureOrigin ? new UriBuilder(serverUri) { Host = "shareit.test" }.Uri.GetLeftPart(UriPartial.Authority) : fixture.Url;
+        await using var browser = await fixture.Playwright.Chromium.LaunchAsync(new()
+        {
+            Headless = true,
+            Args = insecureOrigin ? ["--host-resolver-rules=MAP shareit.test 127.0.0.1"] : []
+        });
+        await using var context = await browser.NewContextAsync();
+        // Use real insecure HTTP locally; simulate the missing API against an external HTTPS fixture.
+        if (!insecureOrigin)
+            await context.AddInitScriptAsync("Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });");
+        var page = await Page(context, origin);
+        if (insecureOrigin) Assert.False(await page.EvaluateAsync<bool>("window.isSecureContext"));
+        Assert.True(await page.EvaluateAsync<bool>("typeof crypto.randomUUID === 'undefined'"));
+        await Create(page);
+        if (blocksRandomUUID)
+            await page.EvaluateAsync("Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => { throw new DOMException('Blocked for test', 'SecurityError'); } });");
+
+        byte[][] contents = [[0, 1, 127, 128, 255], [255, 128, 127, 1, 0], [10, 20, 30]];
+        await page.Locator("input[type=file]").SetInputFilesAsync(new[]
+        {
+            new FilePayload { Name = "duplicate.bin", MimeType = "application/octet-stream", Buffer = contents[0] },
+            new FilePayload { Name = "duplicate.bin", MimeType = "application/octet-stream", Buffer = contents[1] }
+        });
+        var progress = page.Locator(".upload-progress > div > span:last-child");
+        await Assertions.Expect(progress).ToHaveTextAsync(new[] { "complete", "complete" });
+        await Assertions.Expect(page.Locator(".file-details strong")).ToHaveTextAsync(new[] { "duplicate.bin", "duplicate.bin" });
+
+        // A later drag-and-drop batch must add a progress row instead of reusing an earlier ID.
+        await page.WaitForFunctionAsync("document.querySelector('input[type=file]').value === ''");
+        await page.Locator(".dropzone").EvaluateAsync("""
+            (dropzone, bytes) => {
+                const transfer = new DataTransfer();
+                transfer.items.add(new File([new Uint8Array(bytes)], 'dropped.bin', { type: 'application/octet-stream' }));
+                dropzone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+            }
+            """, contents[2].Select(value => (int)value).ToArray());
+        await Assertions.Expect(progress).ToHaveTextAsync(new[] { "complete", "complete", "complete" });
+        var downloads = page.Locator(".file-row a[download]");
+        await Assertions.Expect(downloads).ToHaveCountAsync(3);
+        for (var index = 0; index < contents.Length; index++)
+        {
+            var href = await downloads.Nth(index).GetAttributeAsync("href");
+            var downloaded = await page.EvaluateAsync<int[]>("""
+                async url => {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+                    return Array.from(new Uint8Array(await response.arrayBuffer()));
+                }
+                """, href);
+            Assert.Equal(contents[index].Select(value => (int)value).ToArray(), downloaded);
+        }
     }
 
     [Fact]

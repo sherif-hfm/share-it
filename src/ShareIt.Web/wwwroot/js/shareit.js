@@ -1,5 +1,6 @@
 (() => {
   let token, lastTrigger;
+  let nextUploadId = 0;
   const toastTimers = new WeakMap();
   const uploaders = new Map();
   const dialogs = new Map();
@@ -105,6 +106,13 @@
       node.textContent = seconds === 0 ? "Session expired" : seconds >= 3600 ? Math.floor(seconds / 3600) + "h " + Math.floor(seconds % 3600 / 60) + "m left" : Math.floor(seconds / 60) + "m " + String(seconds % 60).padStart(2, "0") + "s left";
     }
   }, 1000);
+  function createUploadId() {
+    try {
+      if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+    } catch { /* Fall back if the browser exposes the API but blocks its use. */ }
+    // These IDs only track progress within this page, including on HTTP LAN origins.
+    return `upload-${++nextUploadId}`;
+  }
   function attachUploads(dropzone, inputId, code, maximumBytes, dotnet) {
     const input = document.getElementById(inputId);
     const state = { xhr: null, cancelled: false, disposed: false, busy: false };
@@ -139,7 +147,7 @@
     async function queue(files) {
       if (state.busy) { toast("Wait for the current upload or cancel it first."); return; }
       state.busy = true; state.cancelled = false;
-      try { for (const file of files) { if (state.cancelled || state.disposed) break; await send(file, crypto.randomUUID()); } }
+      try { for (const file of files) { if (state.cancelled || state.disposed) break; await send(file, createUploadId()); } }
       catch (error) { toast(error.message || "Upload failed."); }
       finally { state.busy = false; state.xhr = null; input.value = ""; }
     }

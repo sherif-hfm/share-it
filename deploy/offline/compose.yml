@@ -1,0 +1,61 @@
+name: shareit-offline
+
+services:
+  app:
+    image: ${SHAREIT_IMAGE:-shareit:offline}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ShareIt__TrustedProxy: ${SHAREIT_PROXY_IP:-172.30.13.254}
+      AllowedHosts: ${SHAREIT_HOST:?Set SHAREIT_HOST in deploy/offline/.env}
+    volumes:
+      - app_data:/data
+      - app_secrets:/keys
+    networks:
+      - shareit
+    # Docker still resolves service names; unknown names are not sent to public DNS.
+    dns:
+      - 127.0.0.1
+    mem_limit: 1g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      SHAREIT_HOST: ${SHAREIT_HOST:?Set SHAREIT_HOST in deploy/offline/.env}
+      SHAREIT_HTTPS_PORT: ${SHAREIT_HTTPS_PORT:-443}
+    ports:
+      - "${SHAREIT_BIND_IP:-0.0.0.0}:${SHAREIT_HTTP_PORT:-80}:80"
+      - "${SHAREIT_BIND_IP:-0.0.0.0}:${SHAREIT_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      shareit:
+        ipv4_address: ${SHAREIT_PROXY_IP:-172.30.13.254}
+      lan:
+    dns:
+      - 127.0.0.1
+    depends_on:
+      - app
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  app_data:
+  app_secrets:
+  caddy_data:
+  caddy_config:
+networks:
+  # A separate bridge lets LAN clients reach the published HTTPS port.
+  # The host/network firewall can deny internet egress for this proxy.
+  lan:
+  shareit:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${SHAREIT_SUBNET:-172.30.13.0/24}

@@ -1,0 +1,17 @@
+{
+	# Client trust is provisioned by the administrator, not inside this container.
+	skip_install_trust
+	# IP-address clients may omit SNI, especially through Docker's port mapping.
+	default_sni {$SHAREIT_HOST}
+	auto_https disable_redirects
+}
+
+{$SHAREIT_HOST} {
+	tls internal
+	encode zstd gzip
+	reverse_proxy app:8080
+}
+
+http://{$SHAREIT_HOST} {
+	redir https://{$SHAREIT_HOST}:{$SHAREIT_HTTPS_PORT}{uri} permanent
+}

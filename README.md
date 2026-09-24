@@ -44,7 +44,11 @@ curl.exe --fail --user w3r-yub "https://share.example.com/api/v1/sessions/w3r-yu
 
 CMD file commands use a `download-<number>` filename when the original name contains variable expansions or characters Windows cannot use in a filename.
 
-## Deploy with Docker
+## Private network / no internet
+
+The app can run entirely on a LAN: all browser assets, authentication, storage, and cleanup are local. Use the dedicated [offline deployment guide](docs/offline-deployment.md) to transfer prebuilt images and run private HTTPS with a local certificate authority. The offline Compose configuration disables image pulls and isolates the app behind its LAN-facing proxy. Clients only need to reach the LAN server and trust its certificate.
+
+## Deploy with Docker (public HTTPS)
 
 1. Point a domain to a Linux server and allow incoming TCP 80/443 (UDP 443 is optional).
 2. Copy `deploy/.env.example` to `deploy/.env` and set the domain and certificate contact email.

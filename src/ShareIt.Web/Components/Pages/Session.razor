@@ -16,8 +16,8 @@
 else
 {
     <section class="workspace">
-        <SessionHeader Code="@snapshot.Code" ExpiresAtUtc="snapshot.ExpiresAtUtc" OnEnd="() => showEnd = true" OnExtend="() => showExpiry = true" OnMount="() => showMount = true" />
-        @if (snapshot.ExpiresAtUtc - DateTime.UtcNow < TimeSpan.FromMinutes(5)) { <div class="expiry-warning" role="status">This session ends soon. Copy what you need or <button class="text-link" @onclick="() => showExpiry = true">extend its lifetime</button>.</div> }
+        <SessionHeader Code="@snapshot.Code" ExpiresAtUtc="snapshot.ExpiresAtUtc" OnEnd="() => showEnd = true" OnExtend="OpenExpiry" OnMount="() => showMount = true" />
+        @if (snapshot.ExpiresAtUtc - DateTime.UtcNow < TimeSpan.FromMinutes(5)) { <div class="expiry-warning" role="status">This session ends soon. Copy what you need or <button class="text-link" @onclick="OpenExpiry">extend its lifetime</button>.</div> }
         @if (pageError != null) { <p class="inline-error" role="alert">@pageError</p> }
         <div class="workspace-tabs" role="tablist" aria-label="Workspace content"><button role="tab" aria-selected="@(!filesTab)" class="@(!filesTab ? "active" : "")" @onclick="() => filesTab = false">Text <span>@snapshot.Texts.Count</span></button><button role="tab" aria-selected="@filesTab" class="@(filesTab ? "active" : "")" @onclick="() => filesTab = true">Files <span>@snapshot.Files.Count</span></button></div>
         <div class="workspace-grid @(filesTab ? "show-files" : "show-text")">
@@ -52,7 +52,13 @@ else
 @if (showEnd && snapshot != null) { <EndSessionDialog ExpiresAtUtc="snapshot.ExpiresAtUtc" Busy="busy" Error="endError" OnCancel="() => showEnd = false" OnEnd="End" /> }
 @if (showExpiry && snapshot != null)
 {
-    <Modal Title="A little more time?" Eyebrow="SESSION LIFETIME" OnCancel="() => showExpiry = false" Class="compact-modal"><p class="modal-description">Choose how much longer this session stays open. Sessions can last up to 24 hours from creation.</p><label class="field-label" for="extend-hours">TIME FROM NOW</label><select id="extend-hours" @bind="extendHours"><option value="1">1 more hour</option><option value="4">4 more hours</option><option value="8">8 more hours</option><option value="24">Up to the 24-hour limit</option></select><div class="modal-actions"><AppButton Kind="secondary" OnClick="() => showExpiry = false">Cancel</AppButton><AppButton OnClick="Extend" Busy="busy">Update expiry</AppButton></div></Modal>
+    <Modal Title="A little more time?" Eyebrow="SESSION LIFETIME" OnCancel="() => showExpiry = false" Class="compact-modal">
+        <p class="modal-description">Choose how much longer this session stays open. Sessions can last up to 24 hours from creation.</p>
+        <label class="field-label" for="extend-hours">TIME FROM NOW</label>
+        <div class="lifetime-shell"><Icon Name="clock" /><input id="extend-hours" type="text" inputmode="numeric" pattern="[1-9]|1[0-9]|2[0-4]" maxlength="2" required autocomplete="off" data-lifetime-hours aria-describedby="extend-hours-unit" @bind="extendHours" @bind:event="oninput" /><span id="extend-hours-unit">hours (1–24)</span></div>
+        @if (expiryError != null) { <p class="inline-error" role="alert">@expiryError</p> }
+        <div class="modal-actions"><AppButton Kind="secondary" OnClick="() => showExpiry = false">Cancel</AppButton><AppButton OnClick="Extend" Busy="busy">Update expiry</AppButton></div>
+    </Modal>
 }
 @if (deleteText != null || deleteFile != null)
 {
@@ -79,14 +85,14 @@ else
     private Caller caller = new(null);
     private bool loading = true, ended, busy, filesTab, showEditor, showEnd, showExpiry, showMount, conflict, disposed;
     private TerminalShell terminalShell = TerminalShell.Bash;
-    private string? closedMessage, pageError, editorError, endError;
+    private string? closedMessage, pageError, editorError, endError, expiryError;
     private string draftTitle = "", draftContent = "", draftLanguage = "text";
     private int? editingNumber, curlNumber;
     private Guid? editingVersion;
     private TextSnapshot? latest, deleteText;
     private FileSnapshot? deleteFile;
     private string? curlFileName;
-    private int extendHours = 1;
+    private string extendHours = "1";
     private readonly CancellationTokenSource stop = new();
     private readonly SemaphoreSlim refresh = new(1, 1);
     private Task? ticker;
@@ -164,11 +170,18 @@ else
         catch (ShareItException ex) { endError = ex.Message; }
         finally { busy = false; }
     }
+    private void OpenExpiry() { expiryError = null; showExpiry = true; }
     private async Task Extend()
     {
         if (snapshot == null || busy) return;
-        busy = true;
-        try { await Sessions.ChangeExpiryAsync(snapshot.Id, caller, extendHours); showExpiry = false; await Reload(); await Toast("Session expiry updated."); }
+        if (extendHours.Length is < 1 or > 2 || extendHours.Any(c => c is < '0' or > '9') ||
+            !int.TryParse(extendHours, out var hours) || hours is < 1 or > 24)
+        {
+            expiryError = "Enter a session lifetime from 1 to 24 hours.";
+            return;
+        }
+        busy = true; expiryError = null;
+        try { await Sessions.ChangeExpiryAsync(snapshot.Id, caller, hours); showExpiry = false; await Reload(); await Toast("Session expiry updated."); }
         catch (ShareItException ex) { pageError = ex.Message; showExpiry = false; }
         finally { busy = false; }
     }

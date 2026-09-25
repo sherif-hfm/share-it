@@ -37,7 +37,7 @@ Built for developers, administrators, and anyone whose work spans more than one 
 | **Pick up the latest saved version** | Saved changes appear in connected browsers. Conflict handling preserves your draft when someone else saves first. |
 | **Bring your terminal** | Read snippets and download files with `curl`, with commands for Bash/macOS, PowerShell, and Windows CMD. |
 | **Mount your session** | Open texts and files as a read-only drive with rclone on Windows, Linux, or macOS. The session's **Mount drive** dialog walks through setup. |
-| **Make room for temporary work** | Choose a session lifetime of 1, 4, 8, or 24 hours. Access ends at expiry, and automatic cleanup takes care of the contents. |
+| **Make room for temporary work** | Enter a session lifetime from 1 to 24 hours. Access ends at expiry, and automatic cleanup takes care of the contents. |
 | **Keep it on your infrastructure** | Host on your own server or private LAN. Browser assets, fonts, storage, and cleanup are local. |
 
 A calm charcoal-and-teal interface keeps the workspace focused, with Dark, Light, and System themes and a responsive layout for smaller screens.

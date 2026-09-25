@@ -4,6 +4,24 @@
   const toastTimers = new WeakMap();
   const uploaders = new Map();
   const dialogs = new Map();
+  const lifetimeValues = new WeakMap();
+  const validLifetime = /^(?:[1-9]|1[0-9]|2[0-4])?$/;
+  document.addEventListener("beforeinput", e => {
+    const input = e.target;
+    if (!input.hasAttribute("data-lifetime-hours")) return;
+    lifetimeValues.set(input, input.value);
+    if (e.data != null) {
+      const next = input.value.slice(0, input.selectionStart) + e.data + input.value.slice(input.selectionEnd);
+      if (!validLifetime.test(next)) e.preventDefault();
+    }
+  });
+  // Cover paste, drop, and other edits before Blazor reads the input value.
+  document.addEventListener("input", e => {
+    const input = e.target;
+    if (!input.hasAttribute("data-lifetime-hours")) return;
+    if (!validLifetime.test(input.value)) input.value = lifetimeValues.get(input) ?? input.defaultValue;
+    lifetimeValues.set(input, input.value);
+  }, true);
   async function csrf() {
     const response = await fetch("/api/antiforgery", { cache: "no-store" });
     if (!response.ok) throw new Error("Unable to connect. Refresh this page and try again.");

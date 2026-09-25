@@ -23,6 +23,14 @@ The new Chromium browser test passed for platform selection, session-specific UR
 
 The mounting dialog now generates direct `:webdav:` commands without a saved remote. The real-rclone check additionally reads exact text using only an ephemeral password environment variable and explicit URL/user arguments, with an empty configuration. Windows PowerShell 5.1 script tests replace the interactive prompt/native executable to verify hidden PIN input, stdin-only password obscuring, literal URL quoting, and environment restoration after success, obscuring failure, and mount failure. These script tests do not represent a native WinFsp mount.
 
+### Short mount commands
+
+The dialog now copies a short downloader command for `/{code}/mount.sh` or `/{code}/mount.ps1`; the full command remains available under Advanced. Bootstrap verification covers anonymous HTTP responses, code validation, UTF-8/LF output, trusted-proxy HTTPS, application base paths, Bash syntax and quoting, and actual downloads into Windows PowerShell 5.1 and PowerShell 7. PowerShell tests replace the PIN prompt and rclone to cover occupied drives, missing rclone, failed downloads, invalid PINs, credential preparation and mount failures, plus restoration of caller variables and both present/absent password environment variables.
+
+The Linux pseudo-terminal test uses the generated Bash script through a pipe, with stubbed rclone and platform prerequisites. Its 11 scenarios cover Linux/macOS selection, hidden leading-zero PIN input, missing dependencies, unsupported platforms, invalid PINs, obscuring and mount failures, no controlling terminal, and a truncated download. It passed in the existing local Linux test image with networking disabled and read-only test inputs. The Linux-only xUnit wrapper is skipped on Windows; the same checked-in shell harness was run separately in that container. This checks script behavior and does not constitute a new native FUSE, macOS NFS, or WinFsp mount check.
+
+The initial non-browser suite passed 109 tests, including real-rclone WebDAV coverage, with the Linux-only wrapper skipped on Windows. The mount-dialog browser test also passed, checking short/full command copying, keyboard access, and desktop/mobile layouts. A follow-up Bash regression covers successful downloads, curl failures (connection, HTTP, and incomplete transfer), script failures, suppression of chained commands after failure, and preservation of the caller's shell options. No production deployment was performed.
+
 | Native mount check | Status |
 |---|---|
 | Windows Explorer drive through WinFsp | Not run: WinFsp is not installed on this host |

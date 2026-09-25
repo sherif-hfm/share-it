@@ -84,6 +84,20 @@ curl --fail --user w3r-yub 'https://share.example.com/api/v1/sessions/w3r-yub/fi
 
 Select **Bash / macOS**, **PowerShell**, or **Windows CMD** in the interface to copy a command for your terminal. Use `curl.exe` in Windows PowerShell. Keep the PIN out of URLs and command arguments.
 
+Mount the session as a read-only drive with one short command, then enter the PIN:
+
+```bash
+# Linux / macOS
+(set -o pipefail; curl -fsSL 'https://share.example.com/w3r-yub/mount.sh' | bash)
+```
+
+```powershell
+# Windows PowerShell 5.1 / PowerShell 7 on Windows
+irm 'https://share.example.com/w3r-yub/mount.ps1' -ErrorAction Stop | iex
+```
+
+Install rclone and your platform's mount prerequisites first. The drive opens at `$HOME/ShareIt-w3r-yub` on Linux/macOS or `S:` on Windows. Keep the terminal open; press **Ctrl+C** to disconnect. See the [mounting guide](docs/mounting.md) for prerequisites and customization, or use **Mount drive** in the session to copy the command for your server.
+
 <details>
 <summary><strong>Windows Command Prompt example</strong></summary>
 

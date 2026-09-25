@@ -135,6 +135,7 @@ app.MapSessionEndpoints();
 app.MapTextEndpoints();
 app.MapFileEndpoints();
 app.MapWebDavEndpoints();
+app.MapMountEndpoints();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

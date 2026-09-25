@@ -31,12 +31,18 @@
                 <p>Drives mounted as administrator may not appear in File Explorer. If your window title starts with “Administrator”, open a regular PowerShell window instead.</p>
                 <p>Already mounted as administrator? Press <kbd>Ctrl</kbd> + <kbd>C</kbd> in that window before running the command again.</p>
             </div>
-            <p>You can run this from the folder containing <code>rclone.exe</code>. Use an available drive letter; change <code>S:</code> if it is already in use.</p>
+            <p>You can run this from the folder containing <code>rclone.exe</code>. The drive opens at <code>S:</code>. To choose another letter, copy the full command under Advanced and change <code>$shareItDrive</code>.</p>
         }
         <button class="button primary mount-copy" data-copy-value="@Command"><Icon Name="copy" Size="14" /> Copy mount command</button>
         <details class="mount-command-details"><summary>View command</summary><pre class="curl-command mount-command">@Command</pre></details>
         <p class="field-hint">Keep this terminal running. Browse the <code>texts</code> and <code>files</code> folders. Browser changes appear after the 15-second directory cache expires and you refresh or reopen the item.</p>
     </section>
+    <details class="mount-step mount-command-details">
+        <summary>Advanced: full command</summary>
+        <p>Copy this command to inspect or customize the mount settings before running it.</p>
+        <pre class="curl-command mount-command mount-full-command">@FullCommand</pre>
+        <button class="small-button" data-copy-value="@FullCommand"><Icon Name="copy" Size="14" /> Copy full command</button>
+    </details>
     <details class="mount-step">
         <summary>Connection details for other clients</summary>
         <dl class="mount-settings">
@@ -60,6 +66,7 @@
     [Parameter] public EventCallback OnCancel { get; set; }
     private MountPlatform platform = MountPlatform.Windows;
     private string DavUrl => MountCommands.Url(Navigation.BaseUri, Code);
-    private string Command => MountCommands.Mount(Navigation.BaseUri, Code, platform);
+    private string Command => MountCommands.Bootstrap(Navigation.BaseUri, Code, platform);
+    private string FullCommand => MountCommands.Mount(Navigation.BaseUri, Code, platform);
     private static string Label(MountPlatform value) => value == MountPlatform.MacOS ? "macOS" : value.ToString();
 }

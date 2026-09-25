@@ -66,6 +66,8 @@ public sealed class MountCommandsTests
             $script:mounted = $false
             $script:mountArgs = @()
             $script:failure = ''
+            function Get-PSDrive { param($Name, $ErrorAction) }
+            function Write-Host { param($Object) }
             function Read-Host {
               param([string]$Prompt, [switch]$AsSecureString)
               if (-not $AsSecureString) { throw 'PIN prompt was not hidden.' }

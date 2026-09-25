@@ -24,6 +24,8 @@ Errors include a machine-readable `code` and human-readable `detail`. Statuses: 
 
 ## Read-only WebDAV
 
+`GET /{code}/mount.sh` and `GET /{code}/mount.ps1` return public mount helpers as `text/plain; charset=utf-8`, with `Cache-Control: no-store`. Valid codes are normalized without checking session existence; invalid code formats return 400. These endpoints require no authentication and contain no private session data. The scripts prompt locally for the PIN and authenticate through WebDAV. See [the mounting guide](mounting.md) for the Bash and PowerShell one-line commands.
+
 `/dav/{code}/` exposes one session through Basic authentication (code/PIN); browser cookies alone do not authorize it. Use [the mounting guide](mounting.md) to configure rclone with vendor `other`. There is no session directory at `/dav/`.
 
 | Resource | Methods | Result |

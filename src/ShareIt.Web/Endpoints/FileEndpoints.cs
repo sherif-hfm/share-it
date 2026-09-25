@@ -40,8 +40,19 @@ public static class FileEndpoints
             SessionEndpoints.RequireIdentity(ctx);
             var caller = BrowserIdentity.Caller(ctx.User);
             var snapshot = await sessions.GetAsync(code, caller, ctx.RequestAborted);
-            var result = await files.DownloadAsync(snapshot.Id, caller, number, ctx.RequestAborted);
-            return Results.Stream(result.Stream, "application/octet-stream", result.Name, enableRangeProcessing: false);
+            return await Download(snapshot.Id, caller, number, files, ctx.RequestAborted);
         });
+        app.MapGet("/f/{number:int}", async (int number, HttpContext ctx, FileService files) =>
+        {
+            SessionEndpoints.RequireIdentity(ctx, readerOnly: true);
+            var caller = BrowserIdentity.Caller(ctx.User);
+            return await Download(caller.ReadSessionId!.Value, caller, number, files, ctx.RequestAborted);
+        }).WithMetadata(new TerminalDownloadMetadata());
+    }
+
+    private static async Task<IResult> Download(Guid sessionId, Caller caller, int number, FileService files, CancellationToken ct)
+    {
+        var result = await files.DownloadAsync(sessionId, caller, number, ct);
+        return Results.Stream(result.Stream, "application/octet-stream", result.Name, enableRangeProcessing: false);
     }
 }

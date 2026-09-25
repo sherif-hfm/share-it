@@ -46,7 +46,8 @@ builder.Services.AddDataProtection().SetApplicationName("ShareIt").PersistKeysTo
 builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddAuthentication("ShareIt")
     .AddPolicyScheme("ShareIt", null, o => o.ForwardDefaultSelector = ctx =>
-        WebDavProtocol.IsWebDav(ctx) || (ctx.Request.Path.StartsWithSegments("/api/v1") && ctx.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+        WebDavProtocol.IsWebDav(ctx) || TerminalDownloadMetadata.IsEndpoint(ctx) ||
+        (ctx.Request.Path.StartsWithSegments("/api/v1") && ctx.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
             ? BrowserIdentity.BasicScheme : BrowserIdentity.CookieScheme)
     .AddCookie(BrowserIdentity.CookieScheme, o =>
     {
@@ -114,6 +115,8 @@ app.Use(async (ctx, next) =>
     catch (ShareItException ex) when (!ctx.Response.HasStarted)
     {
         ctx.Response.StatusCode = ex.Status;
+        if (ex.Status == 401 && TerminalDownloadMetadata.IsEndpoint(ctx))
+            ctx.Response.Headers.WWWAuthenticate = "Basic realm=\"Share-It\", charset=\"UTF-8\"";
         if (ex.Status == 429 && ex.RetryAfterSeconds is { } retryAfter)
             ctx.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (WebDavProtocol.IsWebDav(ctx)) await WebDavProtocol.ErrorAsync(ctx, ex.Status, ex.Code, ex.Message);

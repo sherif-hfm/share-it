@@ -14,7 +14,8 @@ public sealed class SessionBasicHandler(IOptionsMonitor<AuthenticationSchemeOpti
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!WebDavProtocol.IsWebDav(Context) &&
-            (!Request.Path.StartsWithSegments("/api/v1") || !HttpMethods.IsGet(Request.Method))) return AuthenticateResult.NoResult();
+            (!(Request.Path.StartsWithSegments("/api/v1") || TerminalDownloadMetadata.IsEndpoint(Context)) ||
+             !HttpMethods.IsGet(Request.Method))) return AuthenticateResult.NoResult();
         var header = Request.Headers.Authorization.ToString();
         if (!header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase)) return AuthenticateResult.NoResult();
         string credentials;

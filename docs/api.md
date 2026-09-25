@@ -11,12 +11,16 @@ All production requests use HTTPS. Private responses specify `Cache-Control: no-
 | GET `/api/v1/sessions/{code}` | Browser grant or Basic | Manifest containing stable text/file numbers and metadata |
 | GET `/api/v1/sessions/{code}/texts/{number}/raw` | Browser grant or Basic | Exact UTF-8 saved content |
 | GET `/api/v1/sessions/{code}/files/{number}` | Browser grant or Basic | Download a file |
+| GET `/t/{number}` | Basic only | Exact UTF-8 saved content from the authenticated session |
+| GET `/f/{number}` | Basic only | Download a file from the authenticated session |
 | POST `/api/v1/sessions/{code}/files` | Browser grant + antiforgery | One streaming multipart file; `X-File-Size` gives expected byte length |
 | GET `/health` | Anonymous | Process readiness |
 
 Browser mutations send `X-CSRF-TOKEN`. A new token is fetched after identity changes. Text editing, expiry changes, and workspace session closure use authorized Blazor application-service calls. Cancelling the new-session dialog uses HTTP so it sees the browser cookie issued during creation. Basic credentials remain read-only.
 
 Basic credentials are the session code and four-digit PIN. Codes ignore hyphens and letter case; PINs are strings with exactly four ASCII digits. Failed attempts use a generic message. Item numbers are unique within a session and are never reassigned.
+
+The generated curl commands use `/t/{number}` and `/f/{number}` with `-fu {code}` (short for `--fail --user`) and `-o {filename}` for files. The short routes select the session from the verified Basic identity, so the code is not repeated in the URL. They require Basic even when a browser cookie is present, allow only GET, and share the existing HTTP and PIN attempt limits. Text is returned directly without a `/raw` suffix. Existing versioned routes remain available for browser clients and previously copied commands.
 
 The curl dialog provides separate Bash/macOS, PowerShell, and Windows CMD commands. CMD commands use double quotes around URLs; single quotes are literal characters in Command Prompt and can cause curl's port-number parsing error. A CMD file command uses a safe `download-<number>` name when the original name contains Windows-invalid characters or shell variable expansions.
 

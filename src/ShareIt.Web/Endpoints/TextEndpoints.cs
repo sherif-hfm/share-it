@@ -13,9 +13,21 @@ public static class TextEndpoints
         {
             SessionEndpoints.RequireIdentity(ctx);
             var snapshot = await sessions.GetAsync(code, BrowserIdentity.Caller(ctx.User), ctx.RequestAborted);
-            var text = snapshot.Texts.SingleOrDefault(x => x.Number == number)
-                ?? throw new ShareItException("not_found", "This text is no longer available.", 404);
-            return Results.Text(text.Content, "text/plain", Encoding.UTF8);
+            return RawText(snapshot, number);
         });
+        app.MapGet("/t/{number:int}", async (int number, HttpContext ctx, SessionService sessions) =>
+        {
+            SessionEndpoints.RequireIdentity(ctx, readerOnly: true);
+            var caller = BrowserIdentity.Caller(ctx.User);
+            var snapshot = await sessions.GetAsync(caller.ReadSessionId!.Value, caller, ctx.RequestAborted);
+            return RawText(snapshot, number);
+        }).WithMetadata(new TerminalDownloadMetadata());
+    }
+
+    private static IResult RawText(SessionSnapshot snapshot, int number)
+    {
+        var text = snapshot.Texts.SingleOrDefault(x => x.Number == number)
+            ?? throw new ShareItException("not_found", "This text is no longer available.", 404);
+        return Results.Text(text.Content, "text/plain", Encoding.UTF8);
     }
 }

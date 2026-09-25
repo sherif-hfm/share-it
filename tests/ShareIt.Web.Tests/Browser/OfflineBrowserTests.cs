@@ -72,7 +72,7 @@ public sealed class OfflineBrowserTests(BrowserFixture fixture)
                 ["Authorization"] = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(code + ":" + pin))
             }
         });
-        var raw = await terminal.GetAsync(new Uri(origin, $"/api/v1/sessions/{code}/texts/1/raw").AbsoluteUri);
+        var raw = await terminal.GetAsync(new Uri(origin, "/t/1").AbsoluteUri);
         Assert.Equal(200, raw.Status);
         Assert.Equal(content, await raw.TextAsync());
 
@@ -100,8 +100,8 @@ public sealed class OfflineBrowserTests(BrowserFixture fixture)
         {
             Assert.Equal("https", origin.Scheme);
             Assert.True(File.Exists(caFile), "SHAREIT_E2E_CA_FILE must point to the controlled server's CA certificate.");
-            Assert.Equal(Encoding.UTF8.GetBytes(content), await CurlWithTrustedCa($"/api/v1/sessions/{code}/texts/1/raw"));
-            Assert.Equal(bytes, await CurlWithTrustedCa($"/api/v1/sessions/{code}/files/1"));
+            Assert.Equal(Encoding.UTF8.GetBytes(content), await CurlWithTrustedCa("/t/1"));
+            Assert.Equal(bytes, await CurlWithTrustedCa("/f/1"));
 
             async Task<byte[]> CurlWithTrustedCa(string path)
             {

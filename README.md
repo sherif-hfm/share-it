@@ -73,14 +73,16 @@ Replace the example host and session code with your own. Enter the session PIN w
 
 ```bash
 # See the session's text and file listing
-curl --fail --user w3r-yub 'https://share.example.com/api/v1/sessions/w3r-yub'
+curl -fu w3r-yub 'https://share.example.com/api/v1/sessions/w3r-yub'
 
 # Read an exact saved snippet
-curl --fail --user w3r-yub 'https://share.example.com/api/v1/sessions/w3r-yub/texts/1/raw'
+curl -fu w3r-yub 'https://share.example.com/t/1'
 
 # Download a file
-curl --fail --user w3r-yub 'https://share.example.com/api/v1/sessions/w3r-yub/files/1' --output config.json
+curl -fu w3r-yub 'https://share.example.com/f/1' -o config.json
 ```
+
+The short download routes select the session from your username: `/t/1` reads text 1 and `/f/1` downloads file 1. `-fu` combines `--fail` and `--user`; the PIN stays at the password prompt. Existing `/api/v1/...` URLs remain available.
 
 Select **Bash / macOS**, **PowerShell**, or **Windows CMD** in the interface to copy a command for your terminal. Use `curl.exe` in Windows PowerShell. Keep the PIN out of URLs and command arguments.
 
@@ -104,7 +106,7 @@ Install rclone and your platform's mount prerequisites first. The drive opens at
 In `cmd.exe`, use double quotes; single quotes become part of the URL:
 
 ```bat
-curl.exe --fail --user w3r-yub "https://share.example.com/api/v1/sessions/w3r-yub/texts/1/raw"
+curl.exe -fu w3r-yub "https://share.example.com/t/1"
 ```
 
 Generated CMD file commands use a `download-<number>` filename when the original name contains variable expansions or characters Windows cannot use in a filename.

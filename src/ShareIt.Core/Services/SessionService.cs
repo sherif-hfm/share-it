@@ -63,6 +63,14 @@ public sealed class SessionService(IShareItPersistence persistence, IPinHasher h
         return Snapshots.From(s);
     }
 
+    public async Task<SessionSnapshot> GetAsync(Guid id, Caller caller, CancellationToken ct = default)
+    {
+        var s = await persistence.FindAsync(id, ct)
+            ?? throw new ShareItException("not_found", "This session is unavailable. Start a new session or check the code.", 404);
+        SessionAccessPolicy.Require(s, caller, clock.GetUtcNow().UtcDateTime);
+        return Snapshots.From(s);
+    }
+
     public async Task ChangeExpiryAsync(Guid id, Caller caller, int hoursFromNow, CancellationToken ct = default)
     {
         if (hoursFromNow is < 1 or > 24) throw new ShareItException("lifetime", "Choose between 1 and 24 hours.");

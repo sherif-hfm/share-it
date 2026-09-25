@@ -397,38 +397,84 @@ public class BrowserTests(BrowserFixture fixture)
         await page.Locator("#text-content").FillAsync("echo ready");
         await page.GetByRole(AriaRole.Button, new() { Name = "Save text", Exact = true }).ClickAsync();
         await page.Locator(".text-card").GetByRole(AriaRole.Button, new() { Name = "curl", Exact = true }).ClickAsync();
+        await Assertions.Expect(dialog.Locator(".curl-command")).ToHaveTextAsync($"curl -fu {code} '{fixture.Url}/t/1'");
         await page.GetByRole(AriaRole.Button, new() { Name = "Copy command", Exact = true }).ClickAsync();
         Assert.Equal(await dialog.Locator(".curl-command").TextContentAsync(), await page.EvaluateAsync<string>("navigator.clipboard.readText()"));
         await Assertions.Expect(dialog.GetByRole(AriaRole.Status)).ToHaveTextAsync("Copied to clipboard.");
         await Assertions.Expect(dialog.GetByRole(AriaRole.Status)).ToHaveCSSAsync("opacity", "1");
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Windows CMD", Exact = true }).ClickAsync();
-        await Assertions.Expect(dialog.Locator(".curl-command")).ToContainTextAsync("curl.exe --fail --user " + code + " \"");
+        await Assertions.Expect(dialog.Locator(".curl-command")).ToHaveTextAsync($"curl.exe -fu {code} \"{fixture.Url}/t/1\"");
         await page.GetByRole(AriaRole.Button, new() { Name = "Copy command", Exact = true }).ClickAsync();
         var cmdCommand = await page.EvaluateAsync<string>("navigator.clipboard.readText()");
         Assert.Equal(await dialog.Locator(".curl-command").TextContentAsync(), cmdCommand);
         Assert.DoesNotContain(code + ":" + pin, cmdCommand);
         if (OperatingSystem.IsWindows())
-        {
-            // Exercise CMD's real argument parsing. Supply synthetic credentials
-            // through curl's stdin config so no PIN appears in process arguments.
-            var info = new ProcessStartInfo("cmd.exe")
-            {
-                Arguments = "/d /s /c \"" + cmdCommand + " --silent --show-error --max-time 10 --config -\"",
-                UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
-            };
-            using var process = Process.Start(info)!;
-            var output = process.StandardOutput.ReadToEndAsync();
-            var errors = process.StandardError.ReadToEndAsync();
-            await process.StandardInput.WriteLineAsync($"user = \"{code}:{pin}\"");
-            process.StandardInput.Close();
-            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
-            finally { if (!process.HasExited) process.Kill(true); }
-            Assert.True(process.ExitCode == 0, await errors);
-            Assert.Equal("echo ready", await output);
-        }
+            Assert.Equal("echo ready", await RunCmdCurl(cmdCommand, code!, pin));
         await dialog.GetByRole(AriaRole.Button, new() { Name = "PowerShell", Exact = true }).ClickAsync();
-        await Assertions.Expect(dialog.Locator(".curl-command")).ToContainTextAsync("curl.exe --fail --user " + code + " '");
+        await Assertions.Expect(dialog.Locator(".curl-command")).ToHaveTextAsync($"curl.exe -fu {code} '{fixture.Url}/t/1'");
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Copy command", Exact = true }).ClickAsync();
+        Assert.Equal(await dialog.Locator(".curl-command").TextContentAsync(), await page.EvaluateAsync<string>("navigator.clipboard.readText()"));
+    }
+
+    [Fact]
+    public async Task File_curl_commands_copy_short_routes_with_safe_filenames()
+    {
+        await using var context = await fixture.Browser.NewContextAsync(new() { Permissions = ["clipboard-read", "clipboard-write"] });
+        var page = await Page(context);
+        var (code, pin) = await Create(page);
+        const string fileName = "team's %PATH%.bin";
+        byte[] bytes = [0, 1, 255, 13, 10, 128];
+        await page.GetByLabel("Upload files", new() { Exact = true }).SetInputFilesAsync(new FilePayload
+        {
+            Name = fileName, MimeType = "application/octet-stream", Buffer = bytes
+        });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Copy curl command for " + fileName, Exact = true }).ClickAsync();
+        var dialog = page.GetByRole(AriaRole.Dialog);
+        string command = "";
+        foreach (var (shell, expected) in new[]
+        {
+            ("Bash / macOS", $"curl -fu {code} '{fixture.Url}/f/1' -o 'team'\"'\"'s %PATH%.bin'"),
+            ("PowerShell", $"curl.exe -fu {code} '{fixture.Url}/f/1' -o 'team''s %PATH%.bin'"),
+            ("Windows CMD", $"curl.exe -fu {code} \"{fixture.Url}/f/1\" -o \"download-1.bin\"")
+        })
+        {
+            await dialog.GetByRole(AriaRole.Button, new() { Name = shell, Exact = true }).ClickAsync();
+            await Assertions.Expect(dialog.Locator(".curl-command")).ToHaveTextAsync(expected);
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Copy command", Exact = true }).ClickAsync();
+            command = await page.EvaluateAsync<string>("navigator.clipboard.readText()");
+            Assert.Equal(expected, command);
+            Assert.DoesNotContain(code + ":" + pin, command);
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            var directory = Path.Combine(fixture.Root, ".artifacts", "curl-downloads", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            Assert.Equal("", await RunCmdCurl(command, code, pin, directory));
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(directory, "download-1.bin")));
+            Assert.Single(Directory.GetFiles(directory));
+        }
+    }
+
+    private static async Task<string> RunCmdCurl(string command, string code, string pin, string? directory = null)
+    {
+        // Exercise CMD's real argument parsing. Synthetic credentials go through
+        // curl's stdin config so no PIN appears in process arguments.
+        var info = new ProcessStartInfo("cmd.exe")
+        {
+            Arguments = "/d /s /c \"" + command + " --silent --show-error --max-time 10 --config -\"",
+            WorkingDirectory = directory ?? "",
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        using var process = Process.Start(info)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.StandardInput.WriteLineAsync($"user = \"{code}:{pin}\"");
+        process.StandardInput.Close();
+        try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
+        finally { if (!process.HasExited) process.Kill(true); }
+        Assert.True(process.ExitCode == 0, await errors);
+        return await output;
     }
 
     [Theory]

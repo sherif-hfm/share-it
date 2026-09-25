@@ -6,7 +6,7 @@ public static class CurlCommands
 {
     public static string Create(string baseUri, string code, int number, string? fileName, TerminalShell shell)
     {
-        var url = $"{baseUri.TrimEnd('/')}/api/v1/sessions/{code}/{(fileName == null ? $"texts/{number}/raw" : $"files/{number}")}";
+        var url = $"{baseUri.TrimEnd('/')}/{(fileName == null ? "t" : "f")}/{number}";
         string Quote(string value) => shell switch
         {
             TerminalShell.Cmd => "\"" + value + "\"",
@@ -21,8 +21,8 @@ public static class CurlCommands
             if (extension.Length > 16 || !extension.All(c => char.IsAsciiLetterOrDigit(c) || c == '.')) extension = "";
             fileName = $"download-{number}{extension}";
         }
-        return $"{(shell == TerminalShell.Bash ? "curl" : "curl.exe")} --fail --user {code} {Quote(url)}"
-            + (fileName == null ? "" : " --output " + Quote(fileName));
+        return $"{(shell == TerminalShell.Bash ? "curl" : "curl.exe")} -fu {code} {Quote(url)}"
+            + (fileName == null ? "" : " -o " + Quote(fileName));
     }
 
     private static bool IsCmdFileName(string name)

@@ -67,13 +67,13 @@ Copy buttons try a browser compatibility method when the modern Clipboard API is
 curl can use the exported root directly without changing its machine-wide trust store. The PIN is entered at its password prompt:
 
 ```bash
-curl --cacert shareit-root.crt --fail --user w3r-yub "https://shareit.home.arpa/api/v1/sessions/w3r-yub/texts/1/raw"
+curl --cacert shareit-root.crt -fu w3r-yub "https://shareit.home.arpa/t/1"
 ```
 
 Use `curl.exe` in Windows shells. Windows curl using Schannel may report `CERT_TRUST_REVOCATION_STATUS_UNKNOWN` for the local CA. In that case, add `--ssl-revoke-best-effort`; certificate-chain and hostname validation still apply, while unavailable revocation information is tolerated. This is different from `--insecure`. See [curl's option reference](https://curl.se/docs/manpage.html#--ssl-revoke-best-effort).
 
 ```powershell
-curl.exe --ssl-revoke-best-effort --cacert shareit-root.crt --fail --user w3r-yub "https://shareit.home.arpa/api/v1/sessions/w3r-yub/texts/1/raw"
+curl.exe --ssl-revoke-best-effort --cacert shareit-root.crt -fu w3r-yub "https://shareit.home.arpa/t/1"
 ```
 
 You can omit `--cacert` after the CA is trusted by curl's certificate store. Apply the same options to commands copied from the app when needed. If your organization already has a private CA, it can supply the server certificate/key instead: mount them read-only into Caddy and replace `tls internal` with `tls /certs/server.crt /certs/server.key`. Provision its trust chain and any revocation endpoints locally as your CA requires.

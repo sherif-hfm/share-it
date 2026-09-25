@@ -53,9 +53,9 @@ public static class SessionEndpoints
         });
     }
 
-    public static void RequireIdentity(HttpContext context)
+    public static void RequireIdentity(HttpContext context, bool readerOnly = false)
     {
-        if (context.User.Identity?.IsAuthenticated != true)
+        if (context.User.Identity?.IsAuthenticated != true || (readerOnly && !BrowserIdentity.Caller(context.User).IsReader))
         {
             context.Response.Headers.WWWAuthenticate = "Basic realm=\"Share-It\", charset=\"UTF-8\"";
             throw new ShareItException("unauthorized", "Enter the session code and PIN to continue.", 401);

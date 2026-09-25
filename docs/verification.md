@@ -2,6 +2,12 @@
 
 Updated on 25 September 2026.
 
+## Short curl downloads
+
+Generated commands now use `-fu {code}` with `/t/{number}` for text and `/f/{number}` with `-o` for files. The new HTTP regressions cover exact Unicode/line-ending and binary bytes, attachment names, code normalization, session isolation, Basic-only access despite browser cookies, malformed credentials, closed/expired sessions, shared PIN throttling, missing/deleted items, denied writes, and compatibility with existing versioned downloads.
+
+The Release non-browser suite passed 126 tests; the Linux-only mount-script wrapper and optional real-rclone check were skipped on this Windows run without a configured rclone executable. Three targeted browser checks passed: text-command copying, file-command copying, and offline browser sharing. Copying was checked for Bash, PowerShell, and CMD, including shell-sensitive filenames; real Windows CMD and curl downloaded exact text and binary content with synthetic PINs supplied through stdin. The offline check used the isolated local fixture; private-CA HTTPS was not rerun for this change. No production deployment was performed.
+
 ## WebDAV verification
 
 The read-only drive adds 20 HTTP integration cases covering Basic-only authentication, generic challenges, session isolation and expiry, portable/Unicode/percent-escaped names, directory properties, unknown properties, XML/DTD and request-size rejection, exact bytes, HEAD, conditional/ranged reads, hidden pending/deleted files, and denied mutation methods. A full 150-item metadata burst fits the default DAV request budget; the browser/API budget and PIN lockout remain separate protections.

@@ -1,12 +1,11 @@
-name: Deploy Share-It to VM
+name: Deploy Share-It through Dokploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: shareit-vm-deploy
@@ -16,23 +15,53 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64, shareit-vm]
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Build and deploy
+      - name: Deploy main through Dokploy
+        shell: bash
         run: |
-          docker compose --env-file /home/sherif/share-it/deploy/http/.env -f deploy/http/compose.yml build app
-          if [ "$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' shareit-http 2>/dev/null)" != "shareit-http" ]; then
-            docker rm -f shareit-http 2>/dev/null || true
+          hook_file="$HOME/.config/share-it/dokploy-webhook"
+          if ! read -r webhook < "$hook_file" || [[ ! "$webhook" =~ ^http://localhost:3000/api/deploy/compose/[A-Za-z0-9_-]+$ ]]; then
+            echo 'Configure the local Share-It webhook on the runner before deploying.' >&2
+            exit 1
           fi
-          docker compose --env-file /home/sherif/share-it/deploy/http/.env -f deploy/http/compose.yml up -d --no-build app
+
+          container_id() {
+            docker --context default inspect --type container \
+              --format '{{if .State.Running}}{{.Id}}{{end}}' shareit-http 2>/dev/null
+          }
+
+          previous_id=$(container_id || true)
+          payload=$(printf '{"ref":"refs/heads/main","after":"%s","head_commit":{"id":"%s","message":"Deploy from GitHub Actions run %s (attempt %s)"}}' \
+            "$GITHUB_SHA" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+
+          # Pass the webhook to curl on stdin so its token stays out of process arguments and logs.
+          if ! status=$(printf 'url = "%s"\n' "$webhook" | curl --config - --noproxy '*' \
+              --silent --max-time 20 --output /dev/null --write-out '%{http_code}' \
+              --header 'X-GitHub-Event: push' --json "$payload") || [ "$status" != 200 ]; then
+            echo "Dokploy did not accept the deployment webhook (HTTP ${status:-000})." >&2
+            exit 1
+          fi
+
+          # Dokploy recreates the container on every deploy, including workflow-only changes.
+          deadline=$((SECONDS + 600))
+          until [ "$SECONDS" -ge "$deadline" ]; do
+            current_id=$(container_id || true)
+            if [ -n "$current_id" ] && [ "$current_id" != "$previous_id" ] &&
+              curl --fail --silent --max-time 5 --output /dev/null http://172.16.16.106:8083/health; then
+              echo 'The replacement Share-It container is serving requests.'
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo 'Share-It did not become ready after the Dokploy trigger. Check Dokploy deployment logs.' >&2
+          exit 1
       - name: Verify HTTP health
-        run: curl --fail --silent --show-error --retry 15 --retry-delay 2 --retry-all-errors http://172.16.16.106:8083/health
+        run: curl --fail --silent --show-error --max-time 10 http://172.16.16.106:8083/health
       - name: Verify public hostname
         run: |
-          curl --fail --silent --show-error --header 'Host: share-it.sherif.online' http://172.16.16.106:8083/health
+          curl --fail --silent --show-error --max-time 10 --header 'Host: share-it.sherif.online' http://172.16.16.106:8083/health
       - name: Verify public HTTPS connection
         run: |
           curl --fail --silent --show-error --output /dev/null --max-time 20 \
